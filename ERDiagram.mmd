@@ -1,0 +1,49 @@
+erDiagram
+
+    USER {
+        int user_id PK
+        string name
+        string email
+        enum role
+        string major
+        string password
+    }
+
+    ORGANIZATION {
+        int org_id PK
+        string org_name
+        string contact_email
+    }
+
+    EVENTTYPE {
+        int type_id PK
+        string type_name UK
+    }
+
+    EVENT {
+        int eid PK
+        int org_id FK
+        int organizer_id FK
+        int type_id FK
+        string title
+        datetime event_date
+        string location
+        int capacity
+        int current_registered
+        text description
+    }
+
+    REGISTRATION {
+        int user_id FK
+        int eid FK
+        datetime register_time
+        enum status
+        datetime checkin_time
+    }
+
+    %% Relationships
+    ORGANIZATION ||--o{ EVENT : "hosts"
+    EVENTTYPE ||--o{ EVENT : "categorizes"
+    USER ||--o{ EVENT : "organizes_admin_only"
+    USER ||--o{ REGISTRATION : "registers_student_only"
+    EVENT ||--o{ REGISTRATION : "has"
