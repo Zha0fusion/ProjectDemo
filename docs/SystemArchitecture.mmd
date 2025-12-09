@@ -1,0 +1,92 @@
+flowchart TB
+    subgraph Clients
+        V["Visitor SPA"]
+        S["Staff/Admin Console"]
+        C["Check-in Panel"]
+    end
+
+    subgraph FE["Frontend - Vue"]
+        VR["Vue Router"]
+        VC["UI Components"]
+    end
+
+    subgraph BE["Backend - Flask"]
+        APP["app.py<br/>CORS + Error Handlers"]
+        
+        subgraph API["API Layer - Blueprints"]
+            AUTH["auth_api"]
+            EVT["events_api"]
+            REG["registration_api"]
+            ANA["analytics_api"]
+            CHK["checkin_api"]
+            GRP["groups_api"]
+        end
+        
+        subgraph SVC["Service Layer"]
+            ASVC["auth_service"]
+            ESVC["event_service"]
+            RSVC["registration_service<br/>(capacity + waiting + penalty)"]
+            SSVC["search_service<br/>(ORM multi-table)"]
+            ANSVC["analytic_service<br/>(ORM stats)"]
+            PSVC["user_penalty_service"]
+        end
+        
+        subgraph DATA["Data Access Layer"]
+            ORM["db_orm.py<br/>SQLAlchemy SessionLocal"]
+            RAW["db.py<br/>PyMySQL get_cursor"]
+            MDL["models.py<br/>ORM Models"]
+        end
+    end
+
+    subgraph DB["Database - MySQL"]
+        T["Tables:<br/>USER / EVENT / EVENT_SESSION<br/>REGISTRATION / TAG / EVENT_TAG<br/>AUDIENCE_GROUP / EVENT_USER_GROUP<br/>EVENTTYPE / ORGANIZATION"]
+    end
+
+    subgraph UTIL["Utils"]
+        QR["qrcode_utils<br/>Generate QR Code PNG"]
+    end
+
+    V -->|REST/JSON| VR
+    S -->|REST/JSON| VR
+    C -->|REST/JSON| VR
+    
+    VR --> VC
+    VC -->|Axios| APP
+    
+    APP --> AUTH
+    APP --> EVT
+    APP --> REG
+    APP --> ANA
+    APP --> CHK
+    APP --> GRP
+    
+    AUTH --> ASVC
+    EVT --> ESVC
+    EVT --> SSVC
+    REG --> RSVC
+    ANA --> ANSVC
+    CHK --> RSVC
+    GRP --> PSVC
+    
+    ASVC --> RAW
+    ESVC --> RAW
+    RSVC --> RAW
+    PSVC --> RAW
+    SSVC --> ORM
+    ANSVC --> ORM
+    
+    ORM --> MDL
+    MDL --> T
+    RAW --> T
+    
+    REG --> QR
+    C --> QR
+
+    style Clients fill:#e1f5ff
+    style FE fill:#fff4e1
+    style BE fill:#f0f0f0
+    style API fill:#e8f5e9
+    style SVC fill:#fff9c4
+    style DATA fill:#fce4ec
+    style DB fill:#e0f2f1
+    style UTIL fill:#f3e5f5
