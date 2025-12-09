@@ -1,14 +1,77 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Literal, Dict, Any
 
 from backend.db import get_connection
 
 RegistrationStatus = Literal["registered", "waiting", "cancelled"]
 
+# ===== 新增：爽约惩罚相关配置 =====
+NO_SHOW_WINDOW_DAYS = 30      # 统计最近 30 天
+BLOCK_DAYS = 30               # 被封禁 30 天
+NO_SHOW_THRESHOLD = 3         # 30 天内爽约达到 3 次，触发封禁
+
 
 class RegistrationError(Exception):
     """业务错误（例如活动已满、场次关闭等），用于返回友好提示。"""
     pass
+
+
+def _get_utc_now() -> datetime:
+    """
+    使用带时区的 UTC 时间，避免 datetime.utcnow 的弃用警告。
+    """
+    return datetime.now(timezone.utc)
+
+
+def _maybe_block_user_for_no_show(cursor, user_id: int) -> datetime | None:
+    """
+    使用给定 cursor，在数据库中统计该用户“最近 30 天”的爽约次数：
+      - REGISTRATION.status = 'registered'
+      - REGISTRATION.checkin_time IS NULL
+      - 对应 EVENT_SESSION.end_time < now
+      - 且 end_time 在 [now - NO_SHOW_WINDOW_DAYS, now) 之间
+
+    如果次数 >= NO_SHOW_THRESHOLD，则将 USER.blocked_until 设置为 now + BLOCK_DAYS，
+    返回 blocked_until；否则返回 None。
+
+    注意：这里只执行 UPDATE，不做 commit；由上层事务统一提交。
+    """
+    now = _get_utc_now()
+    start_window = now - timedelta(days=NO_SHOW_WINDOW_DAYS)
+
+    # 统计爽约次数
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS cnt
+        FROM REGISTRATION r
+        JOIN EVENT_SESSION s ON r.session_id = s.session_id
+        WHERE r.user_id = %s
+          AND r.status = 'registered'
+          AND r.checkin_time IS NULL
+          AND s.end_time < %s
+          AND s.end_time >= %s
+        """,
+        (user_id, now, start_window),
+    )
+    row = cursor.fetchone()
+    no_show_count = row["cnt"] or 0
+
+    if no_show_count < NO_SHOW_THRESHOLD:
+        return None
+
+    # 达到阈值 -> 计算封禁截止时间并写入 USER.blocked_until
+    blocked_until = now + timedelta(days=BLOCK_DAYS)
+
+    cursor.execute(
+        """
+        UPDATE `USER`
+        SET blocked_until = %s
+        WHERE user_id = %s
+        """,
+        (blocked_until, user_id),
+    )
+
+    return blocked_until
 
 
 def _build_bilingual_message_for_register(
@@ -23,7 +86,10 @@ def _build_bilingual_message_for_register(
         message_en = "Registration successful"
     elif status == "waiting":
         if queue_position is not None:
-            message_en = f"Session is full. You have been added to the waiting list (position {queue_position})."
+            message_en = (
+                f"Session is full. You have been added to the waiting list "
+                f"(position {queue_position})."
+            )
         else:
             message_en = "Session is full. You have been added to the waiting list."
     else:
@@ -48,6 +114,13 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
           * 还有名额 -> registered
           * 没有名额 -> waiting（并根据现有 waiting 人数给 queue_position）
 
+    同时增加逻辑：
+      - 每次报名前：
+          * 若 USER.blocked_until > now，则拒绝报名；
+          * 统计最近 30 天爽约次数（未签到 + 已结束场次）；
+            若达到 NO_SHOW_THRESHOLD，则自动设置 blocked_until = now + BLOCK_DAYS，
+            并拒绝本次报名。
+
     返回示例：
       {
         "session_id": 3,
@@ -59,11 +132,42 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
         "message_en": "Registration successful"
       }
     """
-    now = datetime.now()
+    now = _get_utc_now()
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # 1) 锁定场次记录，防止并发问题
+            # 0) 检查当前用户是否已存在，及是否已被封禁
+            cursor.execute(
+                """
+                SELECT blocked_until
+                FROM `USER`
+                WHERE user_id = %s
+                """,
+                (user_id,),
+            )
+            user_row = cursor.fetchone()
+            if not user_row:
+                raise RegistrationError("用户不存在")
+
+            blocked_until = user_row["blocked_until"]
+            if blocked_until is not None:
+                # 数据库存的是 DATETIME（通常无 tzinfo），与 now 的 naive 部分比较
+                if isinstance(blocked_until, datetime):
+                    # 将 now 转成 naive 再比较（或根据你的存储策略统一处理）
+                    if blocked_until > now.replace(tzinfo=None):
+                        raise RegistrationError(
+                            f"账号已被封禁，解封时间：{blocked_until}"
+                        )
+
+            # 1) 统计最近 30 天爽约次数，如超标则立刻封禁并拒绝当前报名
+            newly_blocked_until = _maybe_block_user_for_no_show(cursor, user_id)
+            if newly_blocked_until is not None:
+                raise RegistrationError(
+                    f"最近 {NO_SHOW_WINDOW_DAYS} 天内爽约次数过多，"
+                    f"账号已被封禁至 {newly_blocked_until}"
+                )
+
+            # 2) 锁定场次记录，防止并发问题
             cursor.execute(
                 """
                 SELECT
@@ -92,7 +196,7 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
             current_registered = session_row["current_registered"]
             waiting_list_limit = session_row["waiting_list_limit"]
 
-            # 2) 查询是否已经有报名记录（包括 cancelled）
+            # 3) 查询是否已经有报名记录（包括 cancelled）
             cursor.execute(
                 """
                 SELECT status, queue_position
@@ -104,7 +208,7 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
             )
             existing = cursor.fetchone()
 
-            # 2.1 已经是 registered / waiting：不重复报名
+            # 3.1 已经是 registered / waiting：不重复报名
             if existing and existing["status"] in ("registered", "waiting"):
                 base_message_zh = "你已报名该场次（当前状态：%s）" % existing["status"]
                 bilingual = _build_bilingual_message_for_register(
@@ -120,10 +224,12 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
                     **bilingual,
                 }
 
-            # 2.2 cancelled -> 允许重新报名，后面统一当“复用旧记录”处理
-            has_old_cancelled = bool(existing and existing["status"] == "cancelled")
+            # 3.2 cancelled -> 允许重新报名，后面统一当“复用旧记录”处理
+            has_old_cancelled = bool(
+                existing and existing["status"] == "cancelled"
+            )
 
-            # 3) 判断这次是 registered 还是 waiting
+            # 4) 判断这次是 registered 还是 waiting
             if current_registered < capacity:
                 # 还有名额 -> registered
                 new_status: RegistrationStatus = "registered"
@@ -161,9 +267,11 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
                 # 新的候补位次
                 queue_position = current_waiting + 1
                 new_status = "waiting"
-                base_message_zh = "场次已满，已进入候补队列（排在第 %d 位）" % queue_position
+                base_message_zh = (
+                    "场次已满，已进入候补队列（排在第 %d 位）" % queue_position
+                )
 
-            # 4) 写 REGISTRATION：复用旧 cancelled 记录，或者插入新记录
+            # 5) 写 REGISTRATION：复用旧 cancelled 记录，或者插入新记录
             if has_old_cancelled:
                 cursor.execute(
                     """
@@ -391,7 +499,9 @@ def cancel_registration(user_id: int, session_id: int) -> Dict[str, Any]:
 
         conn.commit()
 
-        bilingual = _build_bilingual_message_for_cancel(current_status=current_status)
+        bilingual = _build_bilingual_message_for_cancel(
+            current_status=current_status
+        )
 
         return {
             "session_id": session_id,

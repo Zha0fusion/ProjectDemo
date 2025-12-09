@@ -1,6 +1,8 @@
 # backend/api/registration_api.py
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
+from datetime import datetime, timezone
 from backend.db import get_cursor
+from backend.auth_decorators import login_required
 from backend.services.registration_service import (
     register_for_session,
     cancel_registration,
@@ -11,54 +13,70 @@ registration_bp = Blueprint("registration_api", __name__)
 
 
 @registration_bp.post("/")
+@login_required
 def create_registration():
     """
-    报名接口（最小版）
+    报名接口（必须登录）
 
     URL:
       POST /api/registrations/
 
     请求 JSON 示例：
       {
-        "user_id": 1,
         "session_id": 3
       }
 
-    返回示例：
-      {
-        "session_id": 3,
-        "user_id": 1,
-        "status": "registered",
-        "queue_position": null,
-        "message": "报名成功",
-        "message_zh": "报名成功",
-        "message_en": "Registration successful"
-      }
+    说明：
+      - user_id 不再从请求体传，统一从当前登录用户(g.current_user)获取
     """
     data = request.get_json(silent=True) or {}
 
-    user_id = data.get("user_id")
+    current_user = g.current_user
+
+     # ---- 新增：封禁检查 ----
+    blocked_until = current_user.get("blocked_until")
+    if blocked_until:
+        # 如果从 token 里是字符串，转成 datetime 再比较
+        if isinstance(blocked_until, str):
+            from datetime import datetime
+            blocked_until_dt = datetime.fromisoformat(blocked_until)
+        else:
+            blocked_until_dt = blocked_until
+
+        from datetime import datetime as dt
+        if blocked_until_dt > dt.now(timezone.utc):
+            return (
+                jsonify(
+                    {
+                        "error": "user_blocked",
+                        "message_zh": f"账号已被封禁，解封时间：{blocked_until_dt}",
+                        "message_en": f"User is blocked until {blocked_until_dt}",
+                    }
+                ),
+                403,
+            )
+    # ---- 封禁检查结束 ----
+
+    user_id = current_user["user_id"]
     session_id = data.get("session_id")
 
-    # 基础校验
-    if not isinstance(user_id, int) or not isinstance(session_id, int):
+    # 基础校验：只需要校验 session_id
+    if not isinstance(session_id, int):
         return (
             jsonify(
                 {
                     "error": "invalid_request",
-                    "message_zh": "user_id 和 session_id 必须为整数",
-                    "message_en": "user_id and session_id must be integers",
+                    "message_zh": "session_id 必须为整数",
+                    "message_en": "session_id must be an integer",
                 }
             ),
             400,
         )
 
     try:
-        # service 层已经返回中英双语结构，直接透传
         result = register_for_session(user_id=user_id, session_id=session_id)
         return jsonify(result), 200
     except RegistrationError as e:
-        # 业务错误 -> 4xx
         err_msg = str(e)
         return (
             jsonify(
@@ -71,7 +89,6 @@ def create_registration():
             400,
         )
     except Exception as e:
-        # 未预料错误 -> 5xx
         return (
             jsonify(
                 {
@@ -85,51 +102,41 @@ def create_registration():
 
 
 @registration_bp.post("/cancel")
+@login_required
 def cancel_registration_api():
     """
-    取消报名接口
+    取消报名接口（必须登录）
 
     URL:
       POST /api/registrations/cancel
 
     请求 JSON 示例：
       {
-        "user_id": 1,
         "session_id": 1
       }
 
-    返回示例：
-      {
-        "session_id": 1,
-        "user_id": 1,
-        "old_status": "registered",
-        "new_status": "cancelled",
-        "promoted_user": {
-          "user_id": 2,
-          "session_id": 1
-        },
-        "message_zh": "取消报名成功",
-        "message_en": "Cancellation successful"
-      }
+    说明：
+      - user_id 不再从请求体传，统一从当前登录用户获取
     """
     data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
+
+    current_user = g.current_user
+    user_id = current_user["user_id"]
     session_id = data.get("session_id")
 
-    if not isinstance(user_id, int) or not isinstance(session_id, int):
+    if not isinstance(session_id, int):
         return (
             jsonify(
                 {
                     "error": "invalid_request",
-                    "message_zh": "user_id 和 session_id 必须为整数",
-                    "message_en": "user_id and session_id must be integers",
+                    "message_zh": "session_id 必须为整数",
+                    "message_en": "session_id must be an integer",
                 }
             ),
             400,
         )
 
     try:
-        # service 层已经返回中英双语结构，直接透传
         result = cancel_registration(user_id=user_id, session_id=session_id)
         return jsonify(result), 200
     except RegistrationError as e:
@@ -163,7 +170,6 @@ def list_registrations_for_session(session_id: int):
     （辅助查看）列出某个场次的所有报名记录。
     URL: GET /api/registrations/session/<session_id>
     """
-
     sql = """
     SELECT
         r.user_id,
@@ -195,14 +201,49 @@ def list_registrations_for_session(session_id: int):
 @registration_bp.get("/user/<int:user_id>")
 def list_user_registrations(user_id: int):
     """
-    我的报名列表
-
+    （目前保留）按 user_id 查看报名列表
     URL:
       GET /api/registrations/user/<user_id>
 
-    示例：
-      GET /api/registrations/user/1
+    未来如果只允许用户自己看自己的，可以下掉这个接口，
+    或仅对管理员开放（配合 admin_required）。
     """
+    sql = """
+    SELECT
+        r.session_id,
+        s.eid,
+        e.title AS event_title,
+        e.location AS event_location,
+        s.start_time,
+        s.end_time,
+        r.status,
+        r.queue_position,
+        r.register_time,
+        r.checkin_time
+    FROM REGISTRATION r
+    JOIN EVENT_SESSION s ON r.session_id = s.session_id
+    JOIN EVENT e ON s.eid = e.eid
+    WHERE r.user_id = %s
+    ORDER BY s.start_time ASC, r.register_time ASC
+    """
+    with get_cursor() as cursor:
+        cursor.execute(sql, (user_id,))
+        rows = cursor.fetchall()
+    return jsonify(rows)
+
+
+@registration_bp.get("/me")
+@login_required
+def list_my_registrations():
+    """
+    当前登录用户的报名列表（推荐前端使用这个接口）
+
+    URL:
+      GET /api/registrations/me
+    """
+    current_user = g.current_user
+    user_id = current_user["user_id"]
+
     sql = """
     SELECT
         r.session_id,
