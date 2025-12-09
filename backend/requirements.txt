@@ -1,7 +1,19 @@
 # backend/requirements.txt
 
+# Web framework
 Flask==3.0.3
-Flask-Cors==4.0.1
+flask-cors==5.0.0
 
-pymysql==1.1.1
+# ORM & MySQL driver
+SQLAlchemy==2.0.36
+PyMySQL==1.1.1
+
+# Config (.env)
 python-dotenv==1.0.1
+
+# Data validation / schemas
+pydantic==2.9.2
+
+# Testing
+pytest==8.3.3
+pytest-cov==5.0.0

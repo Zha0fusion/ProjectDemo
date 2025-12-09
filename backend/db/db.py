@@ -1,27 +1,31 @@
+# backend/db/db.py
 import os
 import re
-import pymysql
 from contextlib import contextmanager
-from dotenv import load_dotenv
 
-# 在导入时加载 .env
-load_dotenv()
+import pymysql
+
+from backend.config import load_config
+
+# 加载配置（内部会从项目根目录的 .env 读取）
+config = load_config()
 
 
 def get_connection():
     """
     获取一个数据库连接。
-    使用 .env 中的配置：
-      - DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_CHARSET
-    默认 DB_NAME = event_system, DB_CHARSET = utf8mb4
+
+    使用 backend/config.py 中的配置：
+      - config.DB_HOST, config.DB_PORT, config.DB_USER,
+        config.DB_PASSWORD, config.DB_NAME, config.DB_CHARSET
     """
     conn = pymysql.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", 3306)),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", ""),
-        database=os.getenv("DB_NAME", "event_system"),
-        charset=os.getenv("DB_CHARSET", "utf8mb4"),
+        host=config.DB_HOST,
+        port=config.DB_PORT,
+        user=config.DB_USER,
+        password=config.DB_PASSWORD,
+        database=config.DB_NAME,
+        charset=config.DB_CHARSET,
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=False,
     )
@@ -62,12 +66,12 @@ def get_cursor():
             conn.close()
 
 
-def init_db_from_schema(schema_path: str = None):
+def init_db_from_schema(schema_path: str | None = None):
     """
     从 db/schema.sql 初始化数据库结构。
 
     特性：
-    - 使用 .env 中的 DB_NAME（默认为 event_system）作为目标数据库；
+    - 使用 config.DB_NAME 作为目标数据库；
     - 自动 CREATE DATABASE IF NOT EXISTS 并 USE；
     - schema.sql 中可以包含：
         * DROP TABLE IF EXISTS
@@ -76,26 +80,26 @@ def init_db_from_schema(schema_path: str = None):
       但不应包含存储过程 / 触发器 / 复杂 DELIMITER 语句；
     - 可多次执行（开发环境方便重建）。
 
-    用法：
+    用法（在项目根目录运行）：
         python -c "from backend.db import init_db_from_schema; init_db_from_schema()"
     """
-    # 默认 schema.sql 路径：项目根目录 / db / schema.sql
+    # 默认 schema.sql 路径：与当前 db.py 同目录（backend/db/schema.sql）
     if schema_path is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        schema_path = os.path.join(base_dir, "db", "schema.sql")
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        schema_path = os.path.join(current_dir, "schema.sql")
 
     if not os.path.exists(schema_path):
         raise FileNotFoundError(f"schema.sql not found: {schema_path}")
 
-    db_name = os.getenv("DB_NAME", "event_system")
+    db_name = config.DB_NAME
 
     # 先连接到 MySQL 服务器，不指定 database
     conn = pymysql.connect(
-        host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", 3306)),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", ""),
-        charset=os.getenv("DB_CHARSET", "utf8mb4"),
+        host=config.DB_HOST,
+        port=config.DB_PORT,
+        user=config.DB_USER,
+        password=config.DB_PASSWORD,
+        charset=config.DB_CHARSET,
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=False,
     )
@@ -104,7 +108,8 @@ def init_db_from_schema(schema_path: str = None):
         with conn.cursor() as cursor:
             # 创建数据库并选择
             cursor.execute(
-                f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4"
+                f"CREATE DATABASE IF NOT EXISTS `{db_name}` "
+                f"DEFAULT CHARACTER SET {config.DB_CHARSET}"
             )
             cursor.execute(f"USE `{db_name}`")
 
@@ -124,7 +129,7 @@ def init_db_from_schema(schema_path: str = None):
             statements = [s.strip() for s in sql_content.split(";") if s.strip()]
 
             for stmt in statements:
-                # 再次保护：跳过 CREATE DATABASE / USE（已经在 Python 里执行过）
+                # 再保护一下：跳过 CREATE DATABASE / USE（已经在 Python 里执行过）
                 if re.match(r"^\s*(CREATE\s+DATABASE|USE\s+)", stmt, re.IGNORECASE):
                     continue
                 cursor.execute(stmt)
@@ -139,5 +144,8 @@ def init_db_from_schema(schema_path: str = None):
 
 
 if __name__ == "__main__":
-    # 允许直接运行 backend/db.py 来初始化数据库
+    # 允许直接运行:
+    #   python -m backend.db.db
+    # 或在项目根目录:
+    #   python -c "from backend.db import init_db_from_schema; init_db_from_schema()"
     init_db_from_schema()
