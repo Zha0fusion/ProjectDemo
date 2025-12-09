@@ -1,6 +1,7 @@
 # backend/config.py
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------
@@ -51,6 +52,23 @@ class BaseConfig:
             charset=os.getenv("DB_CHARSET", "utf8mb4"),
         ),
     )
+
+    # ---------------- JWT / Auth 配置 ----------------
+    # JWT 签名密钥：优先使用 JWT_SECRET_KEY，否则退化为 SECRET_KEY
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", os.getenv("SECRET_KEY", "dev-secret-key"))
+    # 签名算法
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    # 访问 Token 有效期（秒），默认 7 天
+    JWT_ACCESS_TOKEN_EXPIRES_SECONDS: int = int(
+        os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", 7 * 24 * 60 * 60)
+    )
+
+    @property
+    def JWT_ACCESS_TOKEN_EXPIRES(self) -> timedelta:
+        """
+        以 timedelta 形式暴露有效期，方便 service 层直接使用。
+        """
+        return timedelta(seconds=self.JWT_ACCESS_TOKEN_EXPIRES_SECONDS)
 
 
 class DevelopmentConfig(BaseConfig):
