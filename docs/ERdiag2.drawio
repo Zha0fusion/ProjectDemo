@@ -1,0 +1,73 @@
+<mxfile host="65bd71144e">
+    <diagram id="event-er" name="Event ER Diagram">
+        <mxGraphModel dx="1551" dy="1049" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="USER" value="&lt;b&gt;USER&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="735" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ORGANIZATION" value="&lt;b&gt;ORGANIZATION&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="750" y="270" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EVENTTYPE" value="&lt;b&gt;EVENTTYPE&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="270" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EVENT" value="&lt;b&gt;EVENT&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="500" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EVENT_SESSION" value="&lt;b&gt;EVENT_SESSION&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="500" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="REGISTRATION" value="&lt;b&gt;REGISTRATION&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1090" y="735" width="180" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="TAG" value="&lt;b&gt;TAG&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="910" y="630" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EVENT_TAG" value="&lt;b&gt;EVENT_TAG&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="630" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="AUDIENCE_GROUP" value="&lt;b&gt;AUDIENCE_GROUP&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#36393d;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="540" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EVENT_USER_GROUP" value="&lt;b&gt;EVENT_USER_GROUP&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#36393d;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="550" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge1" value="hosts" style="endArrow=none;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="ORGANIZATION" target="EVENT" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge2" value="categorizes" style="endArrow=none;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="EVENTTYPE" target="EVENT" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge3" value="has" style="endArrow=none;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;flowAnimation=0;" parent="1" source="EVENT" target="EVENT_SESSION" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge4" value="makes" style="endArrow=none;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="USER" target="REGISTRATION" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge5" value="receives" style="endArrow=none;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="EVENT_SESSION" target="REGISTRATION" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge6" value="" style="endArrow=none;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="EVENT" target="EVENT_TAG" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge7" value="" style="endArrow=none;html=1;rounded=0;strokeWidth=2;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="TAG" target="EVENT_TAG" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="930" y="700" as="sourcePoint"/>
+                        <mxPoint x="870" y="570" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge8" value="" style="endArrow=none;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="USER" target="EVENT_USER_GROUP" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge9" value="" style="endArrow=none;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="EVENT" target="EVENT_USER_GROUP" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge10" value="assigned to" style="endArrow=none;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="AUDIENCE_GROUP" target="EVENT_USER_GROUP" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

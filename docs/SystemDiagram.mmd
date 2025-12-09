@@ -1,0 +1,31 @@
+flowchart TB
+    subgraph Clients
+        V[Visitor Browser]
+        S[Staff and Admin Browser]
+        C[Check-in Panel Browser]
+    end
+
+    subgraph Frontend[Vue Frontend]
+        FE[Vue SPA: views and components]
+    end
+
+    subgraph Backend[Flask Backend]
+        A[API and Controllers]
+        SV[Service Layer]
+        R[Repository and ORM]
+    end
+
+    DB[(MySQL Database)]
+
+    V --> FE
+    S --> FE
+    C --> FE
+
+    FE -->|REST API JSON| A
+    A --> SV
+    SV --> R
+    R --> DB
+    DB --> R
+    R --> SV
+    SV --> A
+    A --> FE
