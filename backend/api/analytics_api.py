@@ -2,6 +2,8 @@
 from datetime import datetime
 from flask import Blueprint, jsonify, request, g
 
+from sqlalchemy import func
+
 from backend.services.analytic_service import (
     get_event_overview,
     get_session_stats,
@@ -9,6 +11,9 @@ from backend.services.analytic_service import (
     get_event_registration_trend,
     AnalyticError,
 )
+from backend.auth_decorators import login_required, roles_required
+from backend.db_orm import SessionLocal
+from backend.models.models import Registration, EventSession, Event, EventTag, Tag, EventUserGroup, AudienceGroup
 from backend.auth_decorators import login_required
 
 analytics_bp = Blueprint("analytics_api", __name__)
@@ -136,6 +141,40 @@ def event_trend_api(eid: int):
             ),
             400,
         )
+
+
+@analytics_bp.get("/events/<int:eid>/group-stats")
+@login_required
+@roles_required("staff", "admin")
+def event_group_stats(eid: int):
+    """按观众群体统计某活动的报名/签到人数。"""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(
+                AudienceGroup.group_name,
+                func.count(Registration.user_id).label("registrations"),
+                func.count(Registration.checkin_time).filter(Registration.checkin_time.isnot(None)).label("checkins"),
+            )
+            .select_from(Registration)
+            .join(EventSession, Registration.session_id == EventSession.session_id)
+            .join(Event, EventSession.eid == Event.eid)
+            .join(EventUserGroup, (EventUserGroup.user_id == Registration.user_id) & (EventUserGroup.eid == Event.eid))
+            .join(AudienceGroup, AudienceGroup.group_id == EventUserGroup.group_id)
+            .filter(Event.eid == eid)
+            .group_by(AudienceGroup.group_name)
+            .all()
+        )
+        return jsonify(
+            [
+                {
+                    "group_name": r.group_name,
+                    "registrations": r.registrations,
+                    "checkins": r.checkins,
+                }
+                for r in rows
+            ]
+        )
     except Exception as e:
         return (
             jsonify(
@@ -147,3 +186,56 @@ def event_trend_api(eid: int):
             ),
             500,
         )
+    finally:
+        db.close()
+
+
+@analytics_bp.get("/tags/<tag_name>/overview")
+@login_required
+@roles_required("staff", "admin")
+def tag_overview(tag_name: str):
+    """按标签汇总：活动数、场次数、报名数、签到数。"""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(
+                Event.eid,
+                Event.title,
+                func.count(EventSession.session_id).label("session_count"),
+                func.count(Registration.user_id).label("registrations"),
+                func.count(Registration.checkin_time).filter(Registration.checkin_time.isnot(None)).label("checkins"),
+            )
+            .select_from(Event)
+            .join(EventTag, EventTag.eid == Event.eid)
+            .join(Tag, Tag.tag_id == EventTag.tag_id)
+            .outerjoin(EventSession, EventSession.eid == Event.eid)
+            .outerjoin(Registration, Registration.session_id == EventSession.session_id)
+            .filter(Tag.tag_name == tag_name)
+            .group_by(Event.eid, Event.title)
+            .all()
+        )
+        return jsonify(
+            [
+                {
+                    "eid": r.eid,
+                    "title": r.title,
+                    "session_count": r.session_count,
+                    "registrations": r.registrations,
+                    "checkins": r.checkins,
+                }
+                for r in rows
+            ]
+        )
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "error": "server_error",
+                    "message_zh": "服务器内部错误",
+                    "message_en": "Internal server error: " + str(e),
+                }
+            ),
+            500,
+        )
+    finally:
+        db.close()

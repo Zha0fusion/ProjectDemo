@@ -63,3 +63,45 @@ def login_required(view_func: Callable) -> Callable:
         return view_func(*args, **kwargs)
 
     return wrapper
+
+
+def roles_required(*roles: str) -> Callable:
+    """
+    角色校验装饰器：要求当前用户的 role 在给定 roles 中。
+    需要先经过 login_required，或在本装饰器里检查 g.current_user。
+    """
+
+    def decorator(view_func: Callable) -> Callable:
+        @wraps(view_func)
+        def wrapper(*args: Any, **kwargs: Any):
+            current_user = getattr(g, "current_user", None)
+            if not current_user:
+                return (
+                    jsonify(
+                        {
+                            "error": "unauthorized",
+                            "message_zh": "未登录或 token 无效",
+                            "message_en": "Not authenticated or token invalid",
+                        }
+                    ),
+                    401,
+                )
+
+            role = current_user.get("role")
+            if role not in roles:
+                return (
+                    jsonify(
+                        {
+                            "error": "forbidden",
+                            "message_zh": "当前角色无权限执行此操作",
+                            "message_en": "Current role is not allowed to perform this action",
+                        }
+                    ),
+                    403,
+                )
+
+            return view_func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
