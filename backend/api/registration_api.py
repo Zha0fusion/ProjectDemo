@@ -1,13 +1,19 @@
 # backend/api/registration_api.py
 from flask import Blueprint, jsonify, request, g
 from datetime import datetime, timezone
-from backend.db import get_cursor
+from backend.db import get_cursor, get_connection
 from backend.auth_decorators import login_required
 from backend.services.registration_service import (
     register_for_session,
     cancel_registration,
     RegistrationError,
 )
+from backend.utils.qrcode_utils import (
+    build_checkin_payload,
+    generate_qr_png_bytes,
+    send_qr_response,
+)
+
 
 registration_bp = Blueprint("registration_api", __name__)
 
@@ -266,3 +272,68 @@ def list_my_registrations():
         cursor.execute(sql, (user_id,))
         rows = cursor.fetchall()
     return jsonify(rows)
+
+@registration_bp.get("/qrcode/<int:session_id>")
+@login_required
+def get_registration_qrcode(session_id: int):
+    """
+    获取“当前登录用户在某场次”的签到二维码（PNG 图片）。
+
+    URL:
+      GET /api/registrations/qrcode/<session_id>
+
+    行为：
+      - 如果当前用户没有报名该场次（REGISTRATION 中找不到记录），返回 404。
+      - 否则生成包含 {user_id, session_id} 的 JSON，编码为二维码返回 PNG。
+    """
+    current_user = g.current_user
+    user_id = current_user["user_id"]
+
+    # 确认当前用户确实报了这个场次（不论 registered / waiting / cancelled）
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT status
+                FROM REGISTRATION
+                WHERE user_id = %s AND session_id = %s
+                """,
+                (user_id, session_id),
+            )
+            row = cursor.fetchone()
+
+        if not row:
+            return (
+                jsonify(
+                    {
+                        "error": "registration_not_found",
+                        "message_zh": "你没有该场次的报名记录，无法生成二维码",
+                        "message_en": "No registration found for this session",
+                    }
+                ),
+                404,
+            )
+
+        # 构造二维码内容（JSON 字符串）
+        data_str = build_checkin_payload(user_id=user_id, session_id=session_id)
+        # 生成 PNG 二进制
+        qr_buf = generate_qr_png_bytes(data_str)
+
+        # 返回图片响应
+        # 文件名可以按需自定义，例如 event_<session_id>_ticket.png
+        return send_qr_response(qr_buf, filename=f"ticket_session_{session_id}.png")
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "error": "server_error",
+                    "message_zh": "服务器内部错误",
+                    "message_en": "Internal server error: " + str(e),
+                }
+            ),
+            500,
+        )
+    finally:
+        conn.close()
