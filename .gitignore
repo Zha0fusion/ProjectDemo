@@ -8,6 +8,19 @@ __pycache__/
 *.pyd
 venv/
 .venv/
+.venv*/
+.env.local
+.env.*
+.python-version
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Editors
+.idea/
 
 # Node/Vue
 node_modules/

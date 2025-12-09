@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.app import create_app
+from tests.db_utils import reset_and_seed, check_db_connection
 
 
 @pytest.fixture(scope="session")
@@ -29,8 +30,12 @@ def client(app):
 
 
 @pytest.fixture(autouse=True)
-def mock_auth(monkeypatch):
-    """全局打桩鉴权，避免依赖真实数据库用户。"""
+def mock_auth(monkeypatch, request):
+    """全局打桩鉴权，除非标记 real_auth。"""
+    if request.node.get_closest_marker("real_auth"):
+        yield
+        return
+
     def _fake_get_user(token):
         if token == "test-token":
             return {
@@ -50,3 +55,35 @@ def mock_auth(monkeypatch):
 def auth_header():
     """默认的 Bearer 头，用于通过 login_required/roles_required。"""
     return {"Authorization": "Bearer test-token"}
+
+
+@pytest.fixture()
+def real_auth_header(db_ready, client):
+    """从 /api/auth/login 获取真实 JWT，用于需要 real_auth 的测试。"""
+    resp = client.post(
+        "/api/auth/login",
+        json={"email": "admin@example.com", "password": "password_admin"},
+    )
+    data = resp.get_json()
+    token = data.get("token")
+    return {"Authorization": f"Bearer {token}"}
+
+
+# ===== 数据库相关的标记与基线准备 =====
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "requires_db: 依赖真实数据库的测试")
+    config.addinivalue_line("markers", "real_auth: 使用真实鉴权，禁用打桩")
+    config.addinivalue_line("markers", "perf: 性能/效率类测试")
+
+
+@pytest.fixture(scope="session")
+def db_ready():
+    """探测数据库并重建 schema，失败则 skip。"""
+    try:
+        check_db_connection()
+        reset_and_seed()
+    except Exception as exc:  # pragma: no cover - 仅在 CI 无 DB 时触发
+        pytest.skip(f"requires real DB: {exc}")
+    return True
