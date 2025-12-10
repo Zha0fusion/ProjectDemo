@@ -22,8 +22,12 @@ analytics_bp = Blueprint("analytics_api", __name__)
 @analytics_bp.get("/events/<int:eid>/overview")
 @login_required
 def event_overview_api(eid: int):
+    start_str = request.args.get("start")
+    end_str = request.args.get("end")
+    start = datetime.fromisoformat(start_str) if start_str else None
+    end = datetime.fromisoformat(end_str) if end_str else None
     try:
-        data = get_event_overview(eid)
+        data = get_event_overview(eid, start=start, end=end)
         return jsonify(data), 200
     except AnalyticError as e:
         return (

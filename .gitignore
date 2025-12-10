@@ -34,3 +34,6 @@ yarn-error.log*
 
 # IDE
 .vscode/
+
+# Project docs (exclude from VCS)
+docs/

@@ -35,6 +35,24 @@ def seed_users():
             "password": "password_admin",
             "role": "admin",
         },
+        {
+            "name": "Gallery Guest",
+            "email": "guest@example.com",
+            "password": "password_guest",
+            "role": "visitor",
+        },
+        {
+            "name": "Front Desk",
+            "email": "frontdesk@example.com",
+            "password": "password_front",
+            "role": "staff",
+        },
+        {
+            "name": "Curator",
+            "email": "curator@example.com",
+            "password": "password_curator",
+            "role": "staff",
+        },
     ]
 
     sql = """
@@ -83,8 +101,12 @@ def seed_event_types():
     字段: type_id(AI), type_name
     """
     types = [
-        {"type_name": "Lecture"},
+        {"type_name": "Contemporary Art"},
+        {"type_name": "Installation"},
+        {"type_name": "Performance"},
         {"type_name": "Workshop"},
+        {"type_name": "Artist Talk"},
+        {"type_name": "Photography"},
     ]
 
     sql = """
@@ -113,6 +135,7 @@ def seed_events_and_sessions():
         capacity, current_registered, waiting_list_limit, status
     """
     now = datetime.now()
+    random.seed(20251210)
 
     # 先查出一个 org_id 和几个 type_id 用来引用
     with get_cursor() as cursor:
@@ -123,46 +146,93 @@ def seed_events_and_sessions():
         cursor.execute("SELECT type_id, type_name FROM EVENTTYPE ORDER BY type_id")
         type_rows = cursor.fetchall()
 
-    # 做一下简单防御
     if not type_rows:
         raise RuntimeError("请先插入 EVENTTYPE 示例数据再运行本脚本")
 
-    type_id_lecture = type_rows[0]["type_id"]
-    type_id_workshop = type_rows[1]["type_id"] if len(type_rows) > 1 else type_rows[0]["type_id"]
+    type_ids = [row["type_id"] for row in type_rows]
 
-    events = [
-        {
-            "eid": 1,  # 指定 eid，方便前端调试时使用固定 ID
-            "org_id": org_id,
-            "type_id": type_id_lecture,
-            "title": "Sample Event A - Lecture",
-            "description": "This is a sample lecture event A for development testing.",
-            "location": "Teaching Building A101",
-            "status": "published",
-            "created_at": now,
-            "updated_at": now,
-        },
-        {
-            "eid": 2,
-            "org_id": org_id,
-            "type_id": type_id_workshop,
-            "title": "Sample Event B - Workshop",
-            "description": "This is a sample workshop event B for development testing.",
-            "location": "Lab B202",
-            "status": "published",
-            "created_at": now,
-            "updated_at": now,
-        },
+    # 预设名称，体现艺术展览空间的风格
+    archived_titles = [
+        "Archived | Light Traces",
+        "Archived | Indigo Memory",
+        "Archived | Bronze Echo",
+        "Archived | Paper Garden",
+        "Archived | Kinetic Stillness",
+        "Archived | Stone and Smoke",
+        "Archived | Tidal Residue",
+        "Archived | Invisible Cities",
+        "Archived | Night at the Atrium",
+        "Archived | Textures of Air",
+        "Archived | Broken Columns",
+        "Archived | Velvet Spectrum",
+        "Archived | After the Opening",
+        "Archived | Parallel Lines",
+        "Archived | Fragmented Voices",
     ]
+
+    closed_titles = [
+        "Closed | Midnight Neon",
+        "Closed | Ceramic Pulse",
+        "Closed | Code and Canvas",
+        "Closed | Echoes of Silk",
+        "Closed | Lantern Archive",
+    ]
+
+    published_titles = [
+        "Open | Chromatic Drift",
+        "Open | River of Glass",
+        "Open | Resonance Hall",
+        "Open | Paper Lantern Lab",
+        "Open | Future Relic Studio",
+    ]
+
+    # 为场次预留 4 个“今天”的时间段
+    today_slots = [
+        now.replace(hour=10, minute=0, second=0, microsecond=0),
+        now.replace(hour=12, minute=30, second=0, microsecond=0),
+        now.replace(hour=15, minute=0, second=0, microsecond=0),
+        now.replace(hour=18, minute=0, second=0, microsecond=0),
+    ]
+    today_slot_idx = 0
+
+    def choose_type():
+        return random.choice(type_ids)
+
+    def build_event_records(titles, status, start_days_ago: int, base_desc: str):
+        """生成带有时间偏移的事件元数据列表。"""
+        records = []
+        for offset, title in enumerate(titles):
+            created_at = now - timedelta(days=start_days_ago + offset)
+            updated_at = created_at + timedelta(days=5)
+            records.append(
+                {
+                    "title": title,
+                    "status": status,
+                    "description": f"{base_desc} | Venue explores material narratives and spatial acoustics.",
+                    "location": f"Gallery Room {chr(65 + (offset % 6))}{1 + (offset % 3)}",
+                    "image_url": f"https://example.com/art/{title.lower().replace(' ', '_').replace('|', '').strip()}.jpg",
+                    "allow_multi_session": True,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                    "type_id": choose_type(),
+                }
+            )
+        return records
+
+    archived_events = build_event_records(archived_titles, "archived", 160, "Past installation documenting urban light and shadow")
+    closed_events = build_event_records(closed_titles, "closed", 45, "Recently concluded exhibition on tactile media")
+    open_events = build_event_records(published_titles, "published", 3, "Ongoing open-call program featuring local artists")
+
+    all_events = archived_events + closed_events + open_events
 
     event_sql = """
     INSERT INTO EVENT (
         eid, org_id, type_id, title, description,
-        location, status, created_at, updated_at
+        location, image_url, allow_multi_session, status, created_at, updated_at
     )
     VALUES (
         %(eid)s, %(org_id)s, %(type_id)s, %(title)s, %(description)s,
-        %(location)s, %(status)s, %(created_at)s, %(updated_at)s
+        %(location)s, %(image_url)s, %(allow_multi_session)s, %(status)s, %(created_at)s, %(updated_at)s
     )
     ON DUPLICATE KEY UPDATE
         org_id = VALUES(org_id),
@@ -170,6 +240,8 @@ def seed_events_and_sessions():
         title = VALUES(title),
         description = VALUES(description),
         location = VALUES(location),
+        image_url = VALUES(image_url),
+        allow_multi_session = VALUES(allow_multi_session),
         status = VALUES(status),
         updated_at = VALUES(updated_at)
     """
@@ -186,47 +258,75 @@ def seed_events_and_sessions():
     """
 
     with get_cursor() as cursor:
-        # 插入 EVENT
-        for e in events:
-            cursor.execute(event_sql, e)
+        eid_counter = 1
+        for event in all_events:
+            event_row = {
+                "eid": eid_counter,
+                "org_id": org_id,
+                **event,
+            }
 
-        # 插入 EVENT_SESSION（给每个活动安排几个场次）
-        sessions = [
-            # 活动 1 的两场
-            {
-                "eid": 1,
-                "start_time": now + timedelta(days=1, hours=9),
-                "end_time": now + timedelta(days=1, hours=11),
-                "capacity": 50,
-                "current_registered": 0,
-                "waiting_list_limit": 10,
-                "status": "open",
-            },
-            {
-                "eid": 1,
-                "start_time": now + timedelta(days=2, hours=14),
-                "end_time": now + timedelta(days=2, hours=16),
-                "capacity": 30,
-                "current_registered": 0,
-                "waiting_list_limit": 5,
-                "status": "open",
-            },
-            # 活动 2 的一场
-            {
-                "eid": 2,
-                "start_time": now + timedelta(days=3, hours=10),
-                "end_time": now + timedelta(days=3, hours=13),
-                "capacity": 100,
-                "current_registered": 0,
-                "waiting_list_limit": 20,
-                "status": "open",
-            },
-        ]
+            session_count = random.randint(1, 3)
+            event_row["allow_multi_session"] = session_count > 1
 
-        for s in sessions:
-            cursor.execute(session_sql, s)
+            # 插入 / 更新 EVENT
+            cursor.execute(event_sql, event_row)
 
-    print("✓ EVENT & EVENT_SESSION 示例数据插入完成")
+            # 为该活动重建场次，避免重复
+            cursor.execute("DELETE FROM EVENT_SESSION WHERE eid = %s", (eid_counter,))
+
+            sessions_to_insert = []
+            for _ in range(session_count):
+                if event["status"] == "published" and today_slot_idx < len(today_slots):
+                    start_time = today_slots[today_slot_idx]
+                    today_slot_idx += 1
+                else:
+                    if event["status"] == "archived":
+                        days_offset = random.randint(-180, -60)
+                    elif event["status"] == "closed":
+                        days_offset = random.randint(-30, -2)
+                    else:  # published
+                        days_offset = random.randint(2, 30)
+                    start_time = now + timedelta(days=days_offset, hours=random.randint(9, 18))
+
+                end_time = start_time + timedelta(hours=2)
+                capacity = random.randint(30, 120)
+                sessions_to_insert.append(
+                    {
+                        "eid": eid_counter,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "capacity": capacity,
+                        "current_registered": 0,
+                        "waiting_list_limit": max(5, capacity // 3),
+                        "status": "closed" if event["status"] in ("archived", "closed") else "open",
+                    }
+                )
+
+            # 如果今天的场次不足 4 个，给后续活动补齐
+            while event["status"] == "published" and today_slot_idx < len(today_slots) and len(sessions_to_insert) < 3:
+                start_time = today_slots[today_slot_idx]
+                today_slot_idx += 1
+                end_time = start_time + timedelta(hours=2)
+                capacity = random.randint(40, 100)
+                sessions_to_insert.append(
+                    {
+                        "eid": eid_counter,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "capacity": capacity,
+                        "current_registered": 0,
+                        "waiting_list_limit": max(5, capacity // 3),
+                        "status": "open",
+                    }
+                )
+
+            for s in sessions_to_insert:
+                cursor.execute(session_sql, s)
+
+            eid_counter += 1
+
+    print("✓ EVENT & EVENT_SESSION 示例数据插入完成 —— 含 15 archived, 5 closed, 5 published（含 4 个今天的场次）")
 
 
 def seed_tags_and_event_tags():
@@ -236,9 +336,12 @@ def seed_tags_and_event_tags():
     EVENT_TAG: eid, tag_id
     """
     tags = [
-        {"tag_name": "Academic"},
-        {"tag_name": "Career Development"},
-        {"tag_name": "Hobby"},
+        {"tag_name": "Contemporary"},
+        {"tag_name": "Interactive"},
+        {"tag_name": "Site-specific"},
+        {"tag_name": "Photography"},
+        {"tag_name": "Performance"},
+        {"tag_name": "Workshop"},
     ]
 
     tag_sql = """
@@ -258,11 +361,19 @@ def seed_tags_and_event_tags():
 
         tag_map = {row["tag_name"]: row["tag_id"] for row in tag_rows}
 
-        event_tags = [
-            {"eid": 1, "tag_id": tag_map.get("Academic")},
-            {"eid": 1, "tag_id": tag_map.get("Hobby")},
-            {"eid": 2, "tag_id": tag_map.get("Career Development")},
-        ]
+        cursor.execute("SELECT eid, title, status FROM EVENT ORDER BY eid LIMIT 8")
+        event_rows = cursor.fetchall()
+
+        event_tags = []
+        for e in event_rows:
+            # 为前几个事件绑定不同风格标签
+            if e["status"] == "published":
+                event_tags.append({"eid": e["eid"], "tag_id": tag_map.get("Interactive")})
+                event_tags.append({"eid": e["eid"], "tag_id": tag_map.get("Contemporary")})
+            elif e["status"] == "closed":
+                event_tags.append({"eid": e["eid"], "tag_id": tag_map.get("Performance")})
+            else:
+                event_tags.append({"eid": e["eid"], "tag_id": tag_map.get("Photography")})
 
         et_sql = """
         INSERT IGNORE INTO EVENT_TAG (eid, tag_id)
@@ -300,11 +411,9 @@ def seed_event_user_group():
         default_group_id = group_row["group_id"]
 
         # 2) 找出几个示例用户和活动
-        cursor.execute(
-            "SELECT user_id, email FROM `USER` WHERE email IN ('visitor1@example.com', 'admin@example.com')"
-        )
+        cursor.execute("SELECT user_id, email FROM `USER` ORDER BY user_id LIMIT 6")
         user_rows = cursor.fetchall()
-        cursor.execute("SELECT eid, title FROM EVENT WHERE eid IN (1, 2)")
+        cursor.execute("SELECT eid, title FROM EVENT ORDER BY eid LIMIT 6")
         event_rows = cursor.fetchall()
 
         if not user_rows or not event_rows:
@@ -318,7 +427,7 @@ def seed_event_user_group():
             group_id = VALUES(group_id)
         """
 
-        # 简单示例：把所有这些用户，都加入所有这些活动的默认组
+        # 简单示例：把前几个用户加入前几个活动的默认组
         for u in user_rows:
             for e in event_rows:
                 cursor.execute(

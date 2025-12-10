@@ -45,7 +45,7 @@
     </div>
 
     <div class="card" style="margin-top: 16px;">
-      <h2>我的活动</h2>
+      <h2>My Events</h2>
       <div v-if="!myLoaded">Loading...</div>
       <div v-else>
         <el-table :data="myRegistrationsFiltered" size="small" style="width: 100%">
@@ -68,22 +68,26 @@
       </div>
     </div>
 
-    <el-dialog v-model="noShowDialog" title="报名提示" width="420px">
-      <p>连续三次未签到将被封禁一个月，请确认报名后按时出席。</p>
-      <el-checkbox v-model="suppressWarning">本次不再提示（会话内有效）</el-checkbox>
+    <el-dialog v-model="noShowDialog" title="Registration Notice" width="420px" :header-style="{ background: 'transparent', borderBottom: 'none' }">
+      <p>Missing three check-ins in a row will block your account for one month. Please register only if you will attend.</p>
+      <el-checkbox v-model="suppressWarning">Do not show again for this session</el-checkbox>
       <template #footer>
-        <el-button @click="noShowDialog = false">取消</el-button>
-        <el-button type="primary" @click="proceedRegister">继续报名</el-button>
+        <el-button @click="noShowDialog = false">Cancel</el-button>
+        <el-button type="primary" @click="proceedRegister">Proceed</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="qrDialog" title="签到二维码" width="360px">
-      <div style="text-align: center;">
-        <img v-if="qrSrc" :src="qrSrc" alt="QR" style="max-width: 240px;" />
+    <el-dialog v-model="qrDialog" title="Check-in QR" width="360px" :header-style="{ background: 'transparent', borderBottom: 'none' }">
+      <div class="qr-panel">
+        <div class="qr-bg" :style="{ backgroundImage: `url(${placeholderImage})` }"></div>
+        <div class="qr-overlay">
+          <img v-if="qrSrc" :src="qrSrc" alt="QR" class="qr-img" />
+          <span v-else class="muted">No QR yet</span>
+        </div>
       </div>
       <template #footer>
-        <el-button @click="qrDialog = false">关闭</el-button>
-        <el-button type="primary" :icon="Download" @click="downloadQr">下载</el-button>
+        <el-button @click="qrDialog = false">Close</el-button>
+        <el-button type="primary" :icon="Download" @click="downloadQr">Download</el-button>
       </template>
     </el-dialog>
   </section>
@@ -248,3 +252,39 @@ onMounted(() => {
   loadMyRegistrations();
 });
 </script>
+
+<style scoped>
+
+.qr-panel {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 260px;
+}
+.qr-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(10px);
+  transform: scale(1.05);
+}
+.qr-overlay {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.qr-img {
+  max-width: 240px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+.muted {
+  color: #6b7280;
+}
+</style>

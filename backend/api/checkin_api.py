@@ -149,3 +149,54 @@ def checkin():
         ),
         200,
     )
+
+
+@checkin_bp.get("/history")
+@login_required
+@roles_required("staff", "admin")
+def checkin_history():
+    """Return recent persisted check-ins ordered by time desc."""
+    limit_param = request.args.get("limit", 50)
+    try:
+        limit = max(1, min(int(limit_param), 200))
+    except (TypeError, ValueError):
+        limit = 50
+
+    with get_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                r.user_id,
+                u.name AS user_name,
+                r.session_id,
+                r.checkin_time,
+                s.start_time,
+                s.end_time,
+                e.title AS event_title
+            FROM REGISTRATION r
+            JOIN `USER` u ON u.user_id = r.user_id
+            JOIN EVENT_SESSION s ON s.session_id = r.session_id
+            JOIN EVENT e ON e.eid = s.eid
+            WHERE r.checkin_time IS NOT NULL
+            ORDER BY r.checkin_time DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+
+    result = []
+    for row in rows:
+        result.append(
+            {
+                "user_id": row["user_id"],
+                "user_name": row.get("user_name"),
+                "session_id": row["session_id"],
+                "event_title": row.get("event_title"),
+                "checkin_time": row["checkin_time"].isoformat() if row.get("checkin_time") else None,
+                "start_time": row.get("start_time").isoformat() if row.get("start_time") else None,
+                "end_time": row.get("end_time").isoformat() if row.get("end_time") else None,
+            }
+        )
+
+    return jsonify(result)

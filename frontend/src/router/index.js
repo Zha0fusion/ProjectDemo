@@ -3,6 +3,7 @@ import AuthView from '../views/AuthView.vue';
 import VisitorView from '../views/VisitorView.vue';
 import AdminView from '../views/AdminView.vue';
 import CheckinView from '../views/CheckinView.vue';
+import ScanView from '../views/ScanView.vue';
 import { useAppStore } from '../stores/appStore';
 
 const routes = [
@@ -11,6 +12,7 @@ const routes = [
   { path: '/visitor', name: 'visitor', component: VisitorView },
   { path: '/admin', name: 'admin', component: AdminView, meta: { role: 'admin' } },
   { path: '/checkin', name: 'checkin', component: CheckinView, meta: { role: 'staff' } },
+  { path: '/scan', name: 'scan', component: ScanView, meta: { role: 'staff' } },
 ];
 
 const router = createRouter({

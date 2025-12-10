@@ -1,28 +1,28 @@
 <template>
   <section v-if="store.isAdmin.value">
     <el-tabs v-model="adminTab" class="content-tabs">
-      <el-tab-pane label="活动管理" name="events" />
-      <el-tab-pane label="用户管理" name="users" />
-      <el-tab-pane label="分析&导出" name="analytics" />
-      <el-tab-pane label="设置" name="settings" />
+      <el-tab-pane label="Events" name="events" />
+      <el-tab-pane label="Users" name="users" />
+      <el-tab-pane label="Analytics & Export" name="analytics" />
+      <el-tab-pane label="Settings" name="settings" />
     </el-tabs>
 
     <div v-if="adminTab === 'events'" class="card">
       <div class="card-head" style="gap: 8px; flex-wrap: wrap;">
-        <h2>活动列表</h2>
-        <el-input v-model="adminEventKeyword" size="small" placeholder="按名称/ID搜索" style="max-width: 220px;" />
-        <el-button type="primary" size="small" @click="openCreateEvent">新建活动</el-button>
+        <h2>Event List</h2>
+        <el-input v-model="adminEventKeyword" size="small" placeholder="Search by name/ID" style="max-width: 220px;" />
+        <el-button type="primary" size="small" @click="openCreateEvent">New Event</el-button>
       </div>
       <el-table v-loading="!adminLoaded" :data="filteredAdminEvents" size="small" style="width: 100%">
         <el-table-column prop="eid" label="ID" width="70" />
-        <el-table-column prop="title" label="标题" />
-        <el-table-column prop="status" label="状态" width="120" />
-        <el-table-column prop="allow_multi_session" label="多场次" width="90" :formatter="(r)=> r.allow_multi_session ? 'Yes' : 'No'" />
-        <el-table-column label="操作" width="260">
+        <el-table-column prop="title" label="Title" />
+        <el-table-column prop="status" label="Status" width="120" />
+        <el-table-column prop="allow_multi_session" label="Multi-session" width="110" :formatter="(r)=> r.allow_multi_session ? 'Yes' : 'No'" />
+        <el-table-column label="Actions" width="260">
           <template #default="scope">
-            <el-button size="small" @click="openEditEvent(scope.row)">编辑</el-button>
-            <el-button size="small" type="primary" @click="openPeople(scope.row)">人员管理</el-button>
-            <el-button size="small" type="danger" @click="deleteEventRow(scope.row)">删除</el-button>
+            <el-button size="small" @click="openEditEvent(scope.row)">Edit</el-button>
+            <el-button size="small" type="primary" @click="openPeople(scope.row)">People</el-button>
+            <el-button size="small" type="danger" @click="deleteEventRow(scope.row)">Delete</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -30,23 +30,23 @@
 
     <div v-if="adminTab === 'users'" class="card">
       <div class="card-head">
-        <h3>用户管理</h3>
-        <el-input v-model="userSearch" placeholder="搜索用户" style="max-width: 260px;" @change="searchUsers" />
-        <el-button size="small" type="primary" @click="createUser">新增访客</el-button>
+        <h3>User Management</h3>
+        <el-input v-model="userSearch" placeholder="Search users" style="max-width: 260px;" @change="searchUsers" />
+        <el-button size="small" type="primary" @click="createUser">Add visitor</el-button>
       </div>
       <el-table :data="userResults" size="small">
         <el-table-column prop="user_id" label="ID" width="70" />
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="email" label="邮箱" />
-        <el-table-column prop="role" label="角色" width="100" />
-        <el-table-column label="操作" width="200">
+        <el-table-column prop="name" label="Name" />
+        <el-table-column prop="email" label="Email" />
+        <el-table-column prop="role" label="Role" width="100" />
+        <el-table-column label="Actions" width="200">
           <template #default="scope">
             <el-select v-model="scope.row.role" size="small" style="width: 110px;" @change="(val)=>updateUserRole(scope.row, val)">
               <el-option label="visitor" value="visitor" />
               <el-option label="staff" value="staff" />
               <el-option label="admin" value="admin" />
             </el-select>
-            <el-button size="small" type="danger" @click="deleteUser(scope.row.user_id)">删除</el-button>
+            <el-button size="small" type="danger" @click="deleteUser(scope.row.user_id)">Delete</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -54,45 +54,30 @@
     </div>
 
     <div v-if="adminTab === 'analytics'" class="card">
-      <h3>数据分析与导出</h3>
+      <h3>Analytics & Export</h3>
 
       <div class="summary-row">
         <el-statistic v-for="item in analyticsSummary" :key="item.label" :title="item.label" :value="item.value" />
       </div>
 
-      <div class="block" style="margin-top: 8px;">
-        <span class="demonstration">时间区间</span>
-        <el-date-picker
-          v-model="analyticsRange"
-          type="daterange"
-          unlink-panels
-          range-separator="To"
-          start-placeholder="Start date"
-          end-placeholder="End date"
-          :shortcuts="analyticsShortcuts"
-          size="small"
-        />
-      </div>
-
       <div style="display: flex; gap: 8px; margin: 10px 0; align-items: center; flex-wrap: wrap;">
         <el-input v-model="analyticsEventId" placeholder="event id" style="max-width: 200px;" />
-        <el-button size="small" type="primary" @click="loadEventOverview">加载概览</el-button>
-        <el-button size="small" @click="exportCsv">按区间导出CSV</el-button>
+        <el-button size="small" type="primary" @click="loadEventOverview">Load overview</el-button>
       </div>
 
       <div class="card" style="padding: 12px; margin-bottom: 12px;">
         <div class="card-head" style="margin-bottom: 8px;">
-          <strong>最近活动（每页5条）</strong>
-          <span class="muted">按时间倒序展示</span>
+          <strong>Recent events (5 per page)</strong>
+          <span class="muted">Sorted by start time desc</span>
         </div>
         <el-table :data="recentEventsPage" size="small" stripe>
           <el-table-column prop="eid" label="ID" width="70" />
-          <el-table-column prop="title" label="标题" />
-          <el-table-column prop="status" label="状态" width="120" />
-          <el-table-column prop="start_time" label="开始" :formatter="formatDateCell" />
-          <el-table-column label="操作" width="140">
+          <el-table-column prop="title" label="Title" />
+          <el-table-column prop="status" label="Status" width="120" />
+          <el-table-column prop="start_time" label="Start" :formatter="formatDateCell" />
+          <el-table-column label="Actions" width="140">
             <template #default="scope">
-              <el-button size="small" type="primary" @click="loadOverviewFromRecent(scope.row)">加载概览</el-button>
+              <el-button size="small" type="primary" @click="loadOverviewFromRecent(scope.row)">Load overview</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -109,30 +94,53 @@
       </div>
 
       <el-table v-if="analyticsRows.length" :data="analyticsRows" stripe size="small">
-        <el-table-column prop="key" label="指标" width="200" />
-        <el-table-column prop="value" label="值" />
+        <el-table-column prop="key" label="Metric" width="200" />
+        <el-table-column prop="value" label="Value" />
       </el-table>
-      <div v-else class="muted">尚未加载数据</div>
+      <div v-else class="muted">No data loaded yet.</div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+        <el-button size="small" @click="exportCsv">Export CSV</el-button>
+      </div>
+
+      <div v-if="analyticsRegistrations.length" class="card" style="padding: 12px; margin-top: 12px;">
+        <div class="card-head" style="margin-bottom: 8px;">
+          <strong>Registration details</strong>
+          <span class="muted">Includes user, session, group, register/check-in time</span>
+        </div>
+        <el-table :data="analyticsRegistrations" size="small" stripe height="360">
+          <el-table-column prop="user_id" label="User" width="70" />
+          <el-table-column prop="user_name" label="Name" />
+          <el-table-column prop="user_role" label="Role" width="90" />
+          <el-table-column prop="status" label="Status" width="100" />
+          <el-table-column prop="session_id" label="Session" width="80" />
+          <el-table-column prop="session_start" label="Start" :formatter="formatDateCell" />
+          <el-table-column prop="session_end" label="End" :formatter="formatDateCell" />
+          <el-table-column prop="register_time" label="Registered at" :formatter="formatDateCell" />
+          <el-table-column prop="checkin_time" label="Check-in at" :formatter="formatDateCell" />
+          <el-table-column prop="group_name" label="Group" width="120" />
+        </el-table>
+      </div>
     </div>
 
     <div v-if="adminTab === 'settings'" class="card">
-      <h3>设置</h3>
+      <h3>Settings</h3>
       <el-form label-width="120px" style="max-width: 420px;">
-        <el-form-item label="面板标题">
+        <el-form-item label="Panel title">
           <el-input v-model="store.state.appTitle" @change="store.persistTitle" />
         </el-form-item>
-        <el-form-item label="主题色">
+        <el-form-item label="Brand color">
           <el-color-picker v-model="store.state.brandColor" show-alpha @change="store.applyBrandColor" />
         </el-form-item>
       </el-form>
     </div>
 
-    <el-dialog v-model="eventDialogVisible" :title="isEditingEvent ? '编辑活动' : '新建活动'" width="720px" class="event-dialog">
+    <el-dialog v-model="eventDialogVisible" :title="isEditingEvent ? 'Edit event' : 'New event'" width="720px" class="event-dialog">
       <el-form label-width="120px" :model="eventForm" :disabled="eventSaving">
-        <el-form-item label="标题"><el-input v-model="eventForm.title" /></el-form-item>
-        <el-form-item label="描述"><el-input type="textarea" v-model="eventForm.description" /></el-form-item>
-        <el-form-item label="地点"><el-input v-model="eventForm.location" /></el-form-item>
-        <el-form-item label="状态">
+        <el-form-item label="Title"><el-input v-model="eventForm.title" /></el-form-item>
+        <el-form-item label="Description"><el-input type="textarea" v-model="eventForm.description" /></el-form-item>
+        <el-form-item label="Location"><el-input v-model="eventForm.location" /></el-form-item>
+        <el-form-item label="Status">
           <el-select v-model="eventForm.status" style="width: 160px;">
             <el-option label="draft" value="draft" />
             <el-option label="published" value="published" />
@@ -140,95 +148,96 @@
             <el-option label="archived" value="archived" />
           </el-select>
         </el-form-item>
-        <el-form-item label="类型ID"><el-input-number v-model="eventForm.type_id" :min="1" /></el-form-item>
-        <el-form-item label="封面URL"><el-input v-model="eventForm.image_url" /></el-form-item>
-        <el-form-item label="允许多场次"><el-switch v-model="eventForm.allow_multi_session" /></el-form-item>
-        <el-form-item label="标签">
-          <el-select v-model="eventForm.tag_names" multiple filterable placeholder="选择或输入标签" style="width: 100%;">
+        <el-form-item label="Type ID"><el-input-number v-model="eventForm.type_id" :min="1" /></el-form-item>
+        <el-form-item label="Cover URL"><el-input v-model="eventForm.image_url" /></el-form-item>
+        <el-form-item label="Allow multi-session"><el-switch v-model="eventForm.allow_multi_session" /></el-form-item>
+        <el-form-item label="Tags">
+          <el-select v-model="eventForm.tag_names" multiple filterable placeholder="Select or enter tags" style="width: 100%;">
             <el-option v-for="t in tags" :key="t.tag_id" :label="t.tag_name" :value="t.tag_name" />
           </el-select>
         </el-form-item>
 
         <template v-if="!isEditingEvent">
-          <el-divider>场次</el-divider>
+          <el-divider>Sessions</el-divider>
           <div v-for="(session, idx) in eventForm.sessions" :key="idx" class="session-edit">
-            <el-date-picker v-model="session.start_time" type="datetime" placeholder="开始时间" style="width: 220px;" />
-            <el-date-picker v-model="session.end_time" type="datetime" placeholder="结束时间" style="width: 220px;" />
+            <el-date-picker v-model="session.start_time" type="datetime" placeholder="Start time" style="width: 220px;" />
+            <el-date-picker v-model="session.end_time" type="datetime" placeholder="End time" style="width: 220px;" />
             <el-input-number v-model="session.capacity" :min="1" label="capacity" />
             <el-input-number v-model="session.waiting_list_limit" :min="0" label="waitlist" />
-            <el-button v-if="eventForm.sessions.length > 1" size="small" type="danger" @click="removeSessionRow(idx)">删除</el-button>
+            <el-button v-if="eventForm.sessions.length > 1" size="small" type="danger" @click="removeSessionRow(idx)">Delete</el-button>
           </div>
-          <el-button size="small" @click="addSessionRow">添加场次</el-button>
+          <el-button size="small" @click="addSessionRow">Add session</el-button>
         </template>
       </el-form>
       <template #footer>
-        <el-button @click="eventDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="eventSaving" @click="submitEventForm">保存</el-button>
+        <el-button @click="eventDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="eventSaving" @click="submitEventForm">Save</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="tagDialogVisible" title="更新标签" width="400px">
-      <el-select v-model="tagEditSelection" multiple filterable style="width: 100%;" placeholder="选择标签">
+    <el-dialog v-model="tagDialogVisible" title="Update tags" width="400px">
+      <el-select v-model="tagEditSelection" multiple filterable style="width: 100%;" placeholder="Select tags">
         <el-option v-for="t in tags" :key="t.tag_id" :label="t.tag_name" :value="t.tag_name" />
       </el-select>
       <template #footer>
-        <el-button @click="tagDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveTags">保存</el-button>
+        <el-button @click="tagDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" @click="saveTags">Save</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="groupDialogVisible" :title="`人员管理 - ${groupModalEventTitle}`" width="840px">
+    <el-dialog v-model="groupDialogVisible" :title="`People & groups - ${groupModalEventTitle}`" width="840px">
       <div class="card" style="padding: 12px; margin-bottom: 12px;">
         <div class="card-head">
-          <strong>分组</strong>
+          <strong>Groups</strong>
           <div style="display: flex; gap: 8px; align-items: center;">
-            <el-input v-model="newGroupName" size="small" placeholder="新分组名" style="max-width: 200px;" />
-            <el-button size="small" type="primary" @click="createGroup">创建分组</el-button>
-            <el-button size="small" @click="loadGroupSummary">刷新</el-button>
+            <el-input v-model="newGroupName" size="small" placeholder="New group name" style="max-width: 200px;" />
+            <el-button size="small" type="primary" @click="createGroup">Create group</el-button>
+            <el-button size="small" @click="loadGroupSummary">Refresh</el-button>
           </div>
         </div>
         <el-table :data="groupSummary" size="small">
           <el-table-column prop="group_id" label="ID" width="60" />
-          <el-table-column prop="group_name" label="分组名">
+          <el-table-column prop="group_name" label="Group name">
             <template #default="scope">
               <el-input v-model="scope.row.group_name" size="small" @change="() => renameGroup(scope.row)" />
             </template>
           </el-table-column>
-          <el-table-column prop="member_count" label="人数" width="90" />
+          <el-table-column prop="member_count" label="Members" width="90" />
         </el-table>
       </div>
 
       <div class="card" style="padding: 12px; margin-bottom: 12px;">
         <div class="card-head">
-          <strong>成员列表</strong>
-          <span class="muted">显示该活动当前注册人员与分组</span>
+          <strong>Members</strong>
+          <span class="muted">Current registrations and groups</span>
         </div>
         <el-table :data="groupMembersFlat" size="small" height="260">
           <el-table-column prop="user_id" label="User" width="70" />
-          <el-table-column prop="name" label="姓名" />
-          <el-table-column prop="email" label="邮箱" />
-          <el-table-column prop="session_id" label="场次" width="80" />
-          <el-table-column prop="start_time" label="开始时间" :formatter="formatDateCell" />
-          <el-table-column prop="register_time" label="报名时间" :formatter="formatDateCell" />
-          <el-table-column prop="status" label="状态" width="90" />
-          <el-table-column prop="group_name" label="分组" width="120" />
+          <el-table-column prop="name" label="Name" />
+          <el-table-column prop="email" label="Email" />
+          <el-table-column prop="session_id" label="Session" width="80" />
+          <el-table-column prop="start_time" label="Start" :formatter="formatDateCell" />
+          <el-table-column prop="register_time" label="Registered at" :formatter="formatDateCell" />
+          <el-table-column prop="status" label="Status" width="90" />
+          <el-table-column label="Group" width="220">
+            <template #default="scope">
+              <el-select
+                v-model="scope.row.group_id"
+                placeholder="Select group"
+                size="small"
+                style="width: 180px;"
+                @change="(val) => assignGroupInline(scope.row.user_id, val)"
+              >
+                <el-option :label="'Unassigned'" :value="null" />
+                <el-option v-for="g in groupSummary" :key="g.group_id" :label="g.group_name" :value="g.group_id" />
+              </el-select>
+            </template>
+          </el-table-column>
         </el-table>
-      </div>
-
-      <div class="card" style="padding: 12px;">
-        <div class="card-head">
-          <strong>分配分组</strong>
-          <span class="muted">填写用户ID和分组ID进行分配</span>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <el-input-number v-model.number="assignUserId" :min="1" placeholder="user_id" />
-          <el-input-number v-model.number="assignGroupId" :min="1" placeholder="group_id" />
-          <el-button size="small" type="primary" @click="assignGroup">分配分组</el-button>
-        </div>
       </div>
     </el-dialog>
   </section>
-  <section v-else class="card">需要管理员权限。</section>
+  <section v-else class="card">Admin access required.</section>
 </template>
 
 <script setup>
@@ -277,53 +286,22 @@ const groupEventId = ref(null);
 const groupSummary = ref([]);
 const groupMembers = ref([]);
 const groupMembersFlat = ref([]);
-const assignUserId = ref(null);
-const assignGroupId = ref(null);
 const newGroupName = ref('');
 const groupDialogVisible = ref(false);
 const groupModalEventTitle = ref('');
 
 const analyticsEventId = ref('');
-const analyticsRange = ref([]);
-const analyticsShortcuts = [
-  {
-    text: '最近7天',
-    value: () => {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - 6);
-      return [start, end];
-    },
-  },
-  {
-    text: '本月',
-    value: () => {
-      const start = new Date();
-      start.setDate(1);
-      const end = new Date();
-      return [start, end];
-    },
-  },
-  {
-    text: '最近30天',
-    value: () => {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - 29);
-      return [start, end];
-    },
-  },
-];
 const eventOverview = ref({});
 const analyticsRows = computed(() => Object.entries(eventOverview.value || {}).map(([key, value]) => ({ key, value })));
+const analyticsRegistrations = computed(() => eventOverview.value?.registrations || []);
 const analyticsSummary = computed(() => {
   const total = adminEvents.value.length;
   const published = adminEvents.value.filter((e) => e.status === 'published').length;
   const draft = adminEvents.value.filter((e) => e.status === 'draft').length;
   return [
-    { label: '活动总数', value: total },
-    { label: '已发布', value: published },
-    { label: '草稿/其他', value: Math.max(total - published, 0) },
+      { label: 'Total events', value: total },
+      { label: 'Published', value: published },
+      { label: 'Draft/Other', value: Math.max(total - published, 0) },
   ];
 });
 const recentPage = ref(1);
@@ -569,20 +547,20 @@ async function loadEventMembers() {
     const rows = await resp.json();
     groupMembersFlat.value = rows.map((row) => ({
       ...row,
-      group_name: row.group_name || '未分组',
+      group_name: row.group_name || 'Unassigned',
     }));
   }
 }
 
-async function assignGroup() {
-  if (!assignUserId.value || !assignGroupId.value || !groupEventId.value) return;
+async function assignGroupInline(userId, groupId) {
+  if (!groupEventId.value) return;
   const resp = await fetch(store.apiPath(`/admin/events/${groupEventId.value}/groups/assign`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...store.getAuthHeaders() },
-    body: JSON.stringify({ user_id: assignUserId.value, group_id: assignGroupId.value }),
+    body: JSON.stringify({ user_id: userId, group_id: groupId || null }),
   });
   if (resp.ok) {
-    ElMessage.success('分配完成');
+    ElMessage.success('Assignment completed');
     loadGroupSummary();
     loadEventMembers();
   }
@@ -596,7 +574,7 @@ async function createGroup() {
     body: JSON.stringify({ group_name: newGroupName.value }),
   });
   if (resp.ok) {
-    ElMessage.success('已创建分组');
+    ElMessage.success('Group created');
     newGroupName.value = '';
     loadGroupSummary();
   }
@@ -610,14 +588,15 @@ async function renameGroup(group) {
     body: JSON.stringify({ group_name: group.group_name }),
   });
   if (resp.ok) {
-    ElMessage.success('已更新分组');
+    ElMessage.success('Group updated');
     loadGroupSummary();
   }
 }
 
 async function loadEventOverview() {
   if (!analyticsEventId.value) return;
-  const resp = await fetch(store.apiPath(`/analytics/events/${analyticsEventId.value}/overview`), { headers: store.getAuthHeaders() });
+  const url = store.apiPath(`/analytics/events/${analyticsEventId.value}/overview`);
+  const resp = await fetch(url, { headers: store.getAuthHeaders() });
   if (resp.ok) eventOverview.value = await resp.json();
 }
 
@@ -628,12 +607,7 @@ function loadOverviewFromRecent(row) {
 
 async function exportCsv() {
   if (!analyticsEventId.value) return;
-  const params = new URLSearchParams();
-  if (analyticsRange.value && analyticsRange.value.length === 2) {
-    params.set('start', toDateParam(analyticsRange.value[0]));
-    params.set('end', toDateParam(analyticsRange.value[1]));
-  }
-  const resp = await fetch(store.apiPath(`/admin/events/${analyticsEventId.value}/registrations/export${params.toString() ? `?${params.toString()}` : ''}`), { headers: store.getAuthHeaders() });
+  const resp = await fetch(store.apiPath(`/admin/events/${analyticsEventId.value}/registrations/export`), { headers: store.getAuthHeaders() });
   if (!resp.ok) return;
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);

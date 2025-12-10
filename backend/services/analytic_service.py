@@ -11,6 +11,12 @@ from backend.models.models import (
     EventSession,
     Registration,
     User,
+    EventUserGroup,
+    AudienceGroup,
+    EventTag,
+    Tag,
+    EventType,
+    Organization,
 )
 
 
@@ -22,17 +28,23 @@ def _get_db() -> Session:
     return SessionLocal()
 
 
-def get_event_overview(eid: int) -> Dict[str, Any]:
+def get_event_overview(eid: int, start: datetime | None = None, end: datetime | None = None) -> Dict[str, Any]:
     db = _get_db()
     try:
         event = db.query(Event).filter(Event.eid == eid).first()
         if not event:
             raise AnalyticError("活动不存在")
 
+        session_filter = [EventSession.eid == eid]
+        if start:
+            session_filter.append(EventSession.start_time >= start)
+        if end:
+            session_filter.append(EventSession.start_time < end)
+
         # 场次数
         session_count = (
             db.query(func.count(EventSession.session_id))
-            .filter(EventSession.eid == eid)
+            .filter(*session_filter)
             .scalar()
         )
 
@@ -44,7 +56,7 @@ def get_event_overview(eid: int) -> Dict[str, Any]:
                 EventSession,
                 Registration.session_id == EventSession.session_id,
             )
-            .filter(EventSession.eid == eid)
+            .filter(*session_filter)
             .scalar()
         )
 
@@ -59,7 +71,7 @@ def get_event_overview(eid: int) -> Dict[str, Any]:
                 EventSession,
                 Registration.session_id == EventSession.session_id,
             )
-            .filter(EventSession.eid == eid)
+            .filter(*session_filter)
             .group_by(Registration.status)
             .all()
         )
@@ -84,10 +96,51 @@ def get_event_overview(eid: int) -> Dict[str, Any]:
                 Registration.session_id == EventSession.session_id,
             )
             .filter(
-                EventSession.eid == eid,
+                *session_filter,
                 Registration.checkin_time.isnot(None),
             )
             .scalar()
+        )
+
+        tags = (
+            db.query(Tag.tag_name)
+            .select_from(EventTag)
+            .join(Tag, Tag.tag_id == EventTag.tag_id)
+            .filter(EventTag.eid == eid)
+            .all()
+        )
+
+        sessions = (
+            db.query(EventSession)
+            .filter(*session_filter)
+            .order_by(EventSession.start_time.asc())
+            .all()
+        )
+
+        registrations = (
+            db.query(
+                Registration.user_id,
+                User.name.label("user_name"),
+                User.role.label("user_role"),
+                Registration.status,
+                Registration.register_time,
+                Registration.checkin_time,
+                Registration.session_id,
+                EventSession.start_time.label("session_start"),
+                EventSession.end_time.label("session_end"),
+                EventUserGroup.group_id,
+                AudienceGroup.group_name,
+            )
+            .join(EventSession, Registration.session_id == EventSession.session_id)
+            .join(User, User.user_id == Registration.user_id)
+            .outerjoin(
+                EventUserGroup,
+                (EventUserGroup.user_id == Registration.user_id)
+                & (EventUserGroup.eid == EventSession.eid),
+            )
+            .outerjoin(AudienceGroup, AudienceGroup.group_id == EventUserGroup.group_id)
+            .filter(*session_filter)
+            .all()
         )
 
         return {
@@ -95,6 +148,10 @@ def get_event_overview(eid: int) -> Dict[str, Any]:
             "title": event.title,
             "location": event.location,
             "status": event.status,
+            "type_id": event.type_id,
+            "type_name": event.event_type.type_name if event.event_type else None,
+            "org_id": event.org_id,
+            "org_name": event.organization.org_name if event.organization else None,
             "created_at": event.created_at.isoformat()
             if event.created_at
             else None,
@@ -107,6 +164,35 @@ def get_event_overview(eid: int) -> Dict[str, Any]:
             "waiting_count": waiting_count,
             "cancelled_count": cancelled_count,
             "checked_in_count": checked_in_count,
+            "tags": [t.tag_name for t in tags],
+            "sessions": [
+                {
+                    "session_id": s.session_id,
+                    "start_time": s.start_time.isoformat() if s.start_time else None,
+                    "end_time": s.end_time.isoformat() if s.end_time else None,
+                    "capacity": s.capacity,
+                    "current_registered": s.current_registered,
+                    "waiting_list_limit": s.waiting_list_limit,
+                    "status": s.status,
+                }
+                for s in sessions
+            ],
+            "registrations": [
+                {
+                    "user_id": r.user_id,
+                    "user_name": r.user_name,
+                    "user_role": r.user_role,
+                    "status": r.status,
+                    "register_time": r.register_time.isoformat() if r.register_time else None,
+                    "checkin_time": r.checkin_time.isoformat() if r.checkin_time else None,
+                    "session_id": r.session_id,
+                    "session_start": r.session_start.isoformat() if r.session_start else None,
+                    "session_end": r.session_end.isoformat() if r.session_end else None,
+                    "group_id": r.group_id,
+                    "group_name": r.group_name,
+                }
+                for r in registrations
+            ],
         }
     finally:
         db.close()
