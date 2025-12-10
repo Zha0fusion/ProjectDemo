@@ -222,6 +222,17 @@ def event_group_summary(eid: int):
         return _error_response(str(e), "服务器内部错误", 500)
 
 
+@admin_bp.get("/admin/events/<int:eid>/members")
+@login_required
+@roles_required("admin")
+def event_members(eid: int):
+    try:
+        rows = admin_service.list_event_members(eid)
+        return jsonify(rows)
+    except Exception as e:
+        return _error_response(str(e), "服务器内部错误", 500)
+
+
 @admin_bp.get("/admin/events/<int:eid>/groups/<int:group_id>/members")
 @login_required
 @roles_required("admin")

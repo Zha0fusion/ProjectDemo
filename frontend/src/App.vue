@@ -7,15 +7,6 @@
           <span v-if="store.state.currentUser" class="muted">Hello, {{ store.state.currentUser.name }} ({{ store.state.currentUser.role }})</span>
         </div>
         <div class="header-right">
-          <el-switch
-            v-model="store.state.theme"
-            active-value="dark"
-            inactive-value="light"
-            active-text="Dark"
-            inactive-text="Light"
-            size="small"
-            @change="store.applyTheme"
-          />
           <template v-if="store.state.currentUser">
             <el-link v-if="store.isStaff.value" type="primary" @click="go('visitor')">游客面板</el-link>
             <el-link v-if="store.isStaff.value" type="primary" @click="go('checkin')">签到面板</el-link>

@@ -2,78 +2,30 @@
   <section v-if="store.isAdmin.value">
     <el-tabs v-model="adminTab" class="content-tabs">
       <el-tab-pane label="活动管理" name="events" />
-      <el-tab-pane label="人员管理" name="people" />
       <el-tab-pane label="用户管理" name="users" />
       <el-tab-pane label="分析&导出" name="analytics" />
       <el-tab-pane label="设置" name="settings" />
     </el-tabs>
 
     <div v-if="adminTab === 'events'" class="card">
-      <div class="card-head">
+      <div class="card-head" style="gap: 8px; flex-wrap: wrap;">
         <h2>活动列表</h2>
+        <el-input v-model="adminEventKeyword" size="small" placeholder="按名称/ID搜索" style="max-width: 220px;" />
         <el-button type="primary" size="small" @click="openCreateEvent">新建活动</el-button>
       </div>
-      <el-table v-loading="!adminLoaded" :data="adminEvents" size="small" style="width: 100%">
+      <el-table v-loading="!adminLoaded" :data="filteredAdminEvents" size="small" style="width: 100%">
         <el-table-column prop="eid" label="ID" width="70" />
         <el-table-column prop="title" label="标题" />
         <el-table-column prop="status" label="状态" width="120" />
         <el-table-column prop="allow_multi_session" label="多场次" width="90" :formatter="(r)=> r.allow_multi_session ? 'Yes' : 'No'" />
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="260">
           <template #default="scope">
             <el-button size="small" @click="openEditEvent(scope.row)">编辑</el-button>
+            <el-button size="small" type="primary" @click="openPeople(scope.row)">人员管理</el-button>
             <el-button size="small" type="danger" @click="deleteEventRow(scope.row)">删除</el-button>
-            <el-button size="small" @click="openTags(scope.row)">标签</el-button>
           </template>
         </el-table-column>
       </el-table>
-    </div>
-
-    <div v-if="adminTab === 'people'" class="card">
-      <div class="card-head">
-        <h3>人员检索与强制报名</h3>
-        <el-input v-model="userSearch" placeholder="用户ID/姓名/邮箱" clearable style="max-width: 320px;" @change="searchUsers" />
-      </div>
-      <el-table :data="userResults" size="small" style="width: 100%; margin-bottom: 12px;">
-        <el-table-column prop="user_id" label="ID" width="70" />
-        <el-table-column prop="name" label="姓名" />
-        <el-table-column prop="email" label="邮箱" />
-        <el-table-column prop="role" label="角色" width="90" />
-        <el-table-column label="强制报名" width="280">
-          <template #default="scope">
-            <el-input-number v-model="forceSessionId" :min="1" size="small" placeholder="session_id" />
-            <el-select v-model="forceStatus" size="small" style="width: 110px; margin: 0 6px;">
-              <el-option label="registered" value="registered" />
-              <el-option label="waiting" value="waiting" />
-              <el-option label="cancelled" value="cancelled" />
-            </el-select>
-            <el-button size="small" type="primary" @click="forceRegister(scope.row.user_id)">执行</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-divider>观众群组</el-divider>
-      <el-input v-model.number="groupEventId" placeholder="查看的活动ID" style="max-width: 200px;" />
-      <el-button size="small" @click="loadGroupSummary">刷新分组统计</el-button>
-      <el-table :data="groupSummary" size="small" style="margin-top: 8px;">
-        <el-table-column prop="group_name" label="Group" />
-        <el-table-column prop="member_count" label="人数" width="100" />
-        <el-table-column label="成员" width="160">
-          <template #default="scope">
-            <el-button size="small" @click="loadGroupMembers(scope.row.group_id)">查看</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-table v-if="groupMembers.length" :data="groupMembers" size="small" style="margin-top: 10px;">
-        <el-table-column prop="user_id" label="User" width="80" />
-        <el-table-column prop="name" label="Name" />
-        <el-table-column prop="email" label="Email" />
-      </el-table>
-
-      <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-        <el-input-number v-model.number="assignUserId" :min="1" placeholder="user_id" />
-        <el-input-number v-model.number="assignGroupId" :min="1" placeholder="group_id" />
-        <el-button size="small" type="primary" @click="assignGroup">分配分组</el-button>
-      </div>
     </div>
 
     <div v-if="adminTab === 'users'" class="card">
@@ -99,24 +51,68 @@
         </el-table-column>
       </el-table>
 
-      <el-divider>标签管理</el-divider>
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <el-input v-model="tagName" placeholder="新标签" style="max-width: 200px;" />
-        <el-button size="small" type="primary" @click="createTag">创建</el-button>
-      </div>
-      <el-tag v-for="t in tags" :key="t.tag_id" closable @close="deleteTag(t.tag_id)" style="margin: 4px;">
-        {{ t.tag_name }}
-      </el-tag>
     </div>
 
     <div v-if="adminTab === 'analytics'" class="card">
       <h3>数据分析与导出</h3>
-      <div style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center;">
-        <el-input-number v-model.number="analyticsEventId" :min="1" placeholder="event id" />
-        <el-button size="small" type="primary" @click="loadEventOverview">加载概览</el-button>
-        <el-button size="small" @click="exportCsv">导出CSV</el-button>
+
+      <div class="summary-row">
+        <el-statistic v-for="item in analyticsSummary" :key="item.label" :title="item.label" :value="item.value" />
       </div>
-      <pre class="muted" v-if="Object.keys(eventOverview).length">{{ JSON.stringify(eventOverview, null, 2) }}</pre>
+
+      <div class="block" style="margin-top: 8px;">
+        <span class="demonstration">时间区间</span>
+        <el-date-picker
+          v-model="analyticsRange"
+          type="daterange"
+          unlink-panels
+          range-separator="To"
+          start-placeholder="Start date"
+          end-placeholder="End date"
+          :shortcuts="analyticsShortcuts"
+          size="small"
+        />
+      </div>
+
+      <div style="display: flex; gap: 8px; margin: 10px 0; align-items: center; flex-wrap: wrap;">
+        <el-input v-model="analyticsEventId" placeholder="event id" style="max-width: 200px;" />
+        <el-button size="small" type="primary" @click="loadEventOverview">加载概览</el-button>
+        <el-button size="small" @click="exportCsv">按区间导出CSV</el-button>
+      </div>
+
+      <div class="card" style="padding: 12px; margin-bottom: 12px;">
+        <div class="card-head" style="margin-bottom: 8px;">
+          <strong>最近活动（每页5条）</strong>
+          <span class="muted">按时间倒序展示</span>
+        </div>
+        <el-table :data="recentEventsPage" size="small" stripe>
+          <el-table-column prop="eid" label="ID" width="70" />
+          <el-table-column prop="title" label="标题" />
+          <el-table-column prop="status" label="状态" width="120" />
+          <el-table-column prop="start_time" label="开始" :formatter="formatDateCell" />
+          <el-table-column label="操作" width="140">
+            <template #default="scope">
+              <el-button size="small" type="primary" @click="loadOverviewFromRecent(scope.row)">加载概览</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+          <el-pagination
+            small
+            layout="prev, pager, next"
+            :page-size="recentPageSize"
+            :total="adminEvents.length"
+            :current-page="recentPage"
+            @current-change="(p) => { recentPage = p; }"
+          />
+        </div>
+      </div>
+
+      <el-table v-if="analyticsRows.length" :data="analyticsRows" stripe size="small">
+        <el-table-column prop="key" label="指标" width="200" />
+        <el-table-column prop="value" label="值" />
+      </el-table>
+      <div v-else class="muted">尚未加载数据</div>
     </div>
 
     <div v-if="adminTab === 'settings'" class="card">
@@ -131,7 +127,7 @@
       </el-form>
     </div>
 
-    <el-dialog v-model="eventDialogVisible" :title="isEditingEvent ? '编辑活动' : '新建活动'" width="720px">
+    <el-dialog v-model="eventDialogVisible" :title="isEditingEvent ? '编辑活动' : '新建活动'" width="720px" class="event-dialog">
       <el-form label-width="120px" :model="eventForm" :disabled="eventSaving">
         <el-form-item label="标题"><el-input v-model="eventForm.title" /></el-form-item>
         <el-form-item label="描述"><el-input type="textarea" v-model="eventForm.description" /></el-form-item>
@@ -180,12 +176,63 @@
         <el-button type="primary" @click="saveTags">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="groupDialogVisible" :title="`人员管理 - ${groupModalEventTitle}`" width="840px">
+      <div class="card" style="padding: 12px; margin-bottom: 12px;">
+        <div class="card-head">
+          <strong>分组</strong>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <el-input v-model="newGroupName" size="small" placeholder="新分组名" style="max-width: 200px;" />
+            <el-button size="small" type="primary" @click="createGroup">创建分组</el-button>
+            <el-button size="small" @click="loadGroupSummary">刷新</el-button>
+          </div>
+        </div>
+        <el-table :data="groupSummary" size="small">
+          <el-table-column prop="group_id" label="ID" width="60" />
+          <el-table-column prop="group_name" label="分组名">
+            <template #default="scope">
+              <el-input v-model="scope.row.group_name" size="small" @change="() => renameGroup(scope.row)" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="member_count" label="人数" width="90" />
+        </el-table>
+      </div>
+
+      <div class="card" style="padding: 12px; margin-bottom: 12px;">
+        <div class="card-head">
+          <strong>成员列表</strong>
+          <span class="muted">显示该活动当前注册人员与分组</span>
+        </div>
+        <el-table :data="groupMembersFlat" size="small" height="260">
+          <el-table-column prop="user_id" label="User" width="70" />
+          <el-table-column prop="name" label="姓名" />
+          <el-table-column prop="email" label="邮箱" />
+          <el-table-column prop="session_id" label="场次" width="80" />
+          <el-table-column prop="start_time" label="开始时间" :formatter="formatDateCell" />
+          <el-table-column prop="register_time" label="报名时间" :formatter="formatDateCell" />
+          <el-table-column prop="status" label="状态" width="90" />
+          <el-table-column prop="group_name" label="分组" width="120" />
+        </el-table>
+      </div>
+
+      <div class="card" style="padding: 12px;">
+        <div class="card-head">
+          <strong>分配分组</strong>
+          <span class="muted">填写用户ID和分组ID进行分配</span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <el-input-number v-model.number="assignUserId" :min="1" placeholder="user_id" />
+          <el-input-number v-model.number="assignGroupId" :min="1" placeholder="group_id" />
+          <el-button size="small" type="primary" @click="assignGroup">分配分组</el-button>
+        </div>
+      </div>
+    </el-dialog>
   </section>
   <section v-else class="card">需要管理员权限。</section>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAppStore } from '../stores/appStore';
 
@@ -218,17 +265,88 @@ const eventForm = reactive({
 
 const userSearch = ref('');
 const userResults = ref([]);
-const forceSessionId = ref(null);
-const forceStatus = ref('registered');
+
+const adminEventKeyword = ref('');
+const filteredAdminEvents = computed(() => adminEvents.value.filter((ev) => {
+  const kw = adminEventKeyword.value.toLowerCase();
+  if (!kw) return true;
+  return `${ev.eid}`.includes(kw) || (ev.title || '').toLowerCase().includes(kw);
+}));
 
 const groupEventId = ref(null);
 const groupSummary = ref([]);
 const groupMembers = ref([]);
+const groupMembersFlat = ref([]);
 const assignUserId = ref(null);
 const assignGroupId = ref(null);
+const newGroupName = ref('');
+const groupDialogVisible = ref(false);
+const groupModalEventTitle = ref('');
 
-const analyticsEventId = ref(null);
+const analyticsEventId = ref('');
+const analyticsRange = ref([]);
+const analyticsShortcuts = [
+  {
+    text: '最近7天',
+    value: () => {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 6);
+      return [start, end];
+    },
+  },
+  {
+    text: '本月',
+    value: () => {
+      const start = new Date();
+      start.setDate(1);
+      const end = new Date();
+      return [start, end];
+    },
+  },
+  {
+    text: '最近30天',
+    value: () => {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 29);
+      return [start, end];
+    },
+  },
+];
 const eventOverview = ref({});
+const analyticsRows = computed(() => Object.entries(eventOverview.value || {}).map(([key, value]) => ({ key, value })));
+const analyticsSummary = computed(() => {
+  const total = adminEvents.value.length;
+  const published = adminEvents.value.filter((e) => e.status === 'published').length;
+  const draft = adminEvents.value.filter((e) => e.status === 'draft').length;
+  return [
+    { label: '活动总数', value: total },
+    { label: '已发布', value: published },
+    { label: '草稿/其他', value: Math.max(total - published, 0) },
+  ];
+});
+const recentPage = ref(1);
+const recentPageSize = 5;
+const recentEventsSorted = computed(() => {
+  const clone = [...adminEvents.value];
+  return clone.sort((a, b) => {
+    const aTime = new Date(a.start_time || a.created_at || 0).getTime();
+    const bTime = new Date(b.start_time || b.created_at || 0).getTime();
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return (b.eid || 0) - (a.eid || 0);
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+    return bTime - aTime;
+  });
+});
+const recentEventsPage = computed(() => {
+  const start = (recentPage.value - 1) * recentPageSize;
+  return recentEventsSorted.value.slice(start, start + recentPageSize);
+});
+
+watch(adminEvents, () => {
+  recentPage.value = 1;
+});
 
 const tagName = ref('');
 
@@ -295,6 +413,15 @@ function openTags(row) {
   tagDialogVisible.value = true;
 }
 
+function openPeople(row) {
+  groupEventId.value = row.eid;
+  groupModalEventTitle.value = row.title;
+  groupDialogVisible.value = true;
+  groupMembersFlat.value = [];
+  loadGroupSummary();
+  loadEventMembers();
+}
+
 async function submitEventForm() {
   eventSaving.value = true;
   try {
@@ -321,7 +448,11 @@ async function submitEventForm() {
       }
       ElMessage.success('Updated');
     } else {
-      payload.sessions = eventForm.sessions;
+      payload.sessions = eventForm.sessions.map((session) => ({
+        ...session,
+        start_time: toMySQLDateTime(session.start_time),
+        end_time: toMySQLDateTime(session.end_time),
+      }));
       const resp = await fetch(store.apiPath('/events/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...store.getAuthHeaders() },
@@ -418,33 +549,29 @@ async function deleteUser(userId) {
   if (resp.ok) searchUsers();
 }
 
-async function forceRegister(userId) {
-  if (!forceSessionId.value) {
-    ElMessage.error('请输入 session_id');
-    return;
-  }
-  const resp = await fetch(store.apiPath('/admin/registrations/force'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...store.getAuthHeaders() },
-    body: JSON.stringify({ user_id: userId, session_id: forceSessionId.value, status: forceStatus.value }),
-  });
-  if (resp.ok) {
-    ElMessage.success('已更新');
-  } else {
-    const data = await resp.json();
-    ElMessage.error(data.message_en || '失败');
-  }
-}
-
 async function loadGroupSummary() {
   if (!groupEventId.value) return;
   const resp = await fetch(store.apiPath(`/admin/events/${groupEventId.value}/groups/summary`), { headers: store.getAuthHeaders() });
-  if (resp.ok) groupSummary.value = await resp.json();
+  if (resp.ok) {
+    groupSummary.value = await resp.json();
+  }
 }
 
 async function loadGroupMembers(groupId) {
   const resp = await fetch(store.apiPath(`/admin/events/${groupEventId.value}/groups/${groupId}/members`), { headers: store.getAuthHeaders() });
   if (resp.ok) groupMembers.value = await resp.json();
+}
+
+async function loadEventMembers() {
+  if (!groupEventId.value) return;
+  const resp = await fetch(store.apiPath(`/admin/events/${groupEventId.value}/members`), { headers: store.getAuthHeaders() });
+  if (resp.ok) {
+    const rows = await resp.json();
+    groupMembersFlat.value = rows.map((row) => ({
+      ...row,
+      group_name: row.group_name || '未分组',
+    }));
+  }
 }
 
 async function assignGroup() {
@@ -457,6 +584,34 @@ async function assignGroup() {
   if (resp.ok) {
     ElMessage.success('分配完成');
     loadGroupSummary();
+    loadEventMembers();
+  }
+}
+
+async function createGroup() {
+  if (!groupEventId.value || !newGroupName.value) return;
+  const resp = await fetch(store.apiPath(`/admin/events/${groupEventId.value}/groups`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...store.getAuthHeaders() },
+    body: JSON.stringify({ group_name: newGroupName.value }),
+  });
+  if (resp.ok) {
+    ElMessage.success('已创建分组');
+    newGroupName.value = '';
+    loadGroupSummary();
+  }
+}
+
+async function renameGroup(group) {
+  if (!groupEventId.value || !group.group_id) return;
+  const resp = await fetch(store.apiPath(`/admin/events/${groupEventId.value}/groups/${group.group_id}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...store.getAuthHeaders() },
+    body: JSON.stringify({ group_name: group.group_name }),
+  });
+  if (resp.ok) {
+    ElMessage.success('已更新分组');
+    loadGroupSummary();
   }
 }
 
@@ -466,9 +621,19 @@ async function loadEventOverview() {
   if (resp.ok) eventOverview.value = await resp.json();
 }
 
+function loadOverviewFromRecent(row) {
+  analyticsEventId.value = row.eid;
+  loadEventOverview();
+}
+
 async function exportCsv() {
   if (!analyticsEventId.value) return;
-  const resp = await fetch(store.apiPath(`/admin/events/${analyticsEventId.value}/registrations/export`), { headers: store.getAuthHeaders() });
+  const params = new URLSearchParams();
+  if (analyticsRange.value && analyticsRange.value.length === 2) {
+    params.set('start', toDateParam(analyticsRange.value[0]));
+    params.set('end', toDateParam(analyticsRange.value[1]));
+  }
+  const resp = await fetch(store.apiPath(`/admin/events/${analyticsEventId.value}/registrations/export${params.toString() ? `?${params.toString()}` : ''}`), { headers: store.getAuthHeaders() });
   if (!resp.ok) return;
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);
@@ -479,9 +644,44 @@ async function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
+function toDateParam(val) {
+  if (!val) return '';
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
+}
+
+function formatDateCell(row) {
+  const raw = row.start_time || row.created_at;
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleString();
+}
+
+function toMySQLDateTime(val) {
+  if (!val) return null;
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => n.toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 onMounted(() => {
   loadAdminEvents();
   loadTags();
   searchUsers();
 });
 </script>
+
+<style scoped>
+:deep(.event-dialog .el-dialog__header) {
+  background: transparent;
+}
+</style>

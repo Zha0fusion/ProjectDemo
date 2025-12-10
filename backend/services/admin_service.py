@@ -383,14 +383,16 @@ def list_event_group_summary(eid: int) -> List[Dict[str, Any]]:
                     g.group_name,
                     g.description,
                     g.is_default,
-                    COUNT(eug.user_id) AS member_count
+                    COUNT(DISTINCT CASE WHEN s.eid = %s THEN r.user_id END) AS member_count
                 FROM AUDIENCE_GROUP g
                 LEFT JOIN EVENT_USER_GROUP eug
                     ON g.group_id = eug.group_id AND eug.eid = %s
+                LEFT JOIN REGISTRATION r ON r.user_id = eug.user_id
+                LEFT JOIN EVENT_SESSION s ON s.session_id = r.session_id AND s.eid = %s
                 GROUP BY g.group_id, g.group_name, g.description, g.is_default
                 ORDER BY g.group_name ASC
                 """,
-                (eid,),
+                (eid, eid, eid),
             )
             return cursor.fetchall()
     finally:
@@ -410,6 +412,40 @@ def list_group_members_for_event(eid: int, group_id: int) -> List[Dict[str, Any]
                 ORDER BY u.name ASC
                 """,
                 (eid, group_id),
+            )
+            return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+def list_event_members(eid: int) -> List[Dict[str, Any]]:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    u.user_id,
+                    u.name,
+                    u.email,
+                    u.role,
+                    s.session_id,
+                    s.start_time,
+                    s.end_time,
+                    r.register_time,
+                    r.status,
+                    r.checkin_time,
+                    eug.group_id,
+                    g.group_name
+                FROM REGISTRATION r
+                JOIN EVENT_SESSION s ON s.session_id = r.session_id
+                JOIN `USER` u ON u.user_id = r.user_id
+                LEFT JOIN EVENT_USER_GROUP eug ON eug.user_id = r.user_id AND eug.eid = s.eid
+                LEFT JOIN AUDIENCE_GROUP g ON g.group_id = eug.group_id
+                WHERE s.eid = %s
+                ORDER BY s.start_time ASC, u.name ASC
+                """,
+                (eid,),
             )
             return cursor.fetchall()
     finally:

@@ -9,6 +9,7 @@ from backend.services.event_service import (
     create_event_with_sessions,
     update_event_basic,
     delete_event,
+    list_today_sessions,
     EventError,
 )
 from backend.services.search_service import search_events, SearchError
@@ -141,6 +142,36 @@ def list_events():
     # 这里返回的是列表数据，本身不需要 message_zh / message_en，
     # 前端一般直接展示数据就行，如有需要可以在外层再包一层。
     return jsonify(rows)
+
+
+@events_bp.get("/today-sessions")
+@login_required
+def list_today_sessions_api():
+    try:
+        sessions = list_today_sessions()
+        return jsonify(sessions)
+    except EventError as e:
+        return (
+            jsonify(
+                {
+                    "error": "event_error",
+                    "message_zh": str(e),
+                    "message_en": str(e),
+                }
+            ),
+            400,
+        )
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "error": "server_error",
+                    "message_zh": "服务器内部错误",
+                    "message_en": "Internal server error: " + str(e),
+                }
+            ),
+            500,
+        )
 
 
 @events_bp.get("/<int:eid>/sessions")

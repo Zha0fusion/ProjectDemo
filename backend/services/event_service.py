@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from backend.db import get_connection
@@ -213,5 +213,39 @@ def delete_event(eid: int) -> Dict[str, Any]:
     except Exception as e:
         conn.rollback()
         raise EventError("Error occurred while deleting event: %s" % str(e))
+    finally:
+        conn.close()
+
+
+def list_today_sessions() -> List[Dict[str, Any]]:
+    """Return sessions happening today with event info."""
+    today = datetime.now()
+    start_of_day = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
+
+    sql = """
+    SELECT
+        s.session_id,
+        s.eid,
+        s.start_time,
+        s.end_time,
+        s.capacity,
+        s.current_registered,
+        s.waiting_list_limit,
+        s.status,
+        e.title AS event_title
+    FROM EVENT_SESSION s
+    JOIN EVENT e ON e.eid = s.eid
+    WHERE s.start_time < %s
+      AND s.end_time >= %s
+      AND e.status IN ('published', 'draft', 'closed')
+    ORDER BY s.start_time ASC
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, (end_of_day, start_of_day))
+            return cursor.fetchall()
     finally:
         conn.close()

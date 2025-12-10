@@ -4,10 +4,7 @@
       <el-col :span="12">
         <el-input v-model="eventKeyword" placeholder="Search events" clearable @input="filterEvents" />
       </el-col>
-      <el-col :span="12" style="text-align: right;">
-        <el-link v-if="store.isStaff.value" type="primary" @click="go('admin')">管理面板</el-link>
-        <el-link v-if="store.isStaff.value" type="primary" style="margin-left: 8px;" @click="go('checkin')">签到面板</el-link>
-      </el-col>
+      
     </el-row>
 
     <div v-if="!eventsLoaded" class="card">Loading events...</div>
