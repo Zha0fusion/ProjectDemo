@@ -3,12 +3,16 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
+from backend.auth_decorators import login_required, roles_required
+
 from backend.db import get_cursor
 
 checkin_bp = Blueprint("checkin_api", __name__)
 
 
 @checkin_bp.post("/")
+@login_required
+@roles_required("staff", "admin")
 def checkin():
     """
     签到接口（根据 user_id + session_id）。

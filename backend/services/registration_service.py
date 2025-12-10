@@ -192,6 +192,32 @@ def register_for_session(user_id: int, session_id: int) -> Dict[str, Any]:
             if session_row["status"] != "open":
                 raise RegistrationError("该场次已关闭报名")
 
+            # 2.1 如果活动不允许多场次报名，检查用户是否已在同一活动的其他场次中
+            cursor.execute(
+                "SELECT allow_multi_session FROM EVENT WHERE eid = %s",
+                (session_row["eid"],),
+            )
+            event_row = cursor.fetchone()
+            allow_multi_session = bool(event_row["allow_multi_session"]) if event_row else False
+
+            if not allow_multi_session:
+                cursor.execute(
+                    """
+                    SELECT r.session_id, r.status
+                    FROM REGISTRATION r
+                    JOIN EVENT_SESSION es ON r.session_id = es.session_id
+                    WHERE r.user_id = %s
+                      AND es.eid = %s
+                      AND r.status IN ('registered', 'waiting')
+                      AND r.session_id <> %s
+                    FOR UPDATE
+                    """,
+                    (user_id, session_row["eid"], session_id),
+                )
+                existing_same_event = cursor.fetchone()
+                if existing_same_event:
+                    raise RegistrationError("You are already registered for another session of this event")
+
             capacity = session_row["capacity"]
             current_registered = session_row["current_registered"]
             waiting_list_limit = session_row["waiting_list_limit"]

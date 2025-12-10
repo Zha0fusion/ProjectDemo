@@ -5,7 +5,12 @@ from backend.auth_decorators import login_required, roles_required
 from backend.db import get_cursor
 from backend.db_orm import SessionLocal
 from backend.models.models import Tag, Event, EventTag
-from backend.services.event_service import create_event_with_sessions, EventError
+from backend.services.event_service import (
+    create_event_with_sessions,
+    update_event_basic,
+    delete_event,
+    EventError,
+)
 from backend.services.search_service import search_events, SearchError
 
 events_bp = Blueprint("events_api", __name__)
@@ -75,12 +80,38 @@ def create_event():
             jsonify(
                 {
                     "error": "server_error",
-                    "message_zh": "服务器内部错误",
+                    "message_zh": "Internal server error: " + str(e),
                     "message_en": "Internal server error: " + str(e),
                 }
             ),
             500,
         )
+
+
+@events_bp.get("/manage")
+@login_required
+@roles_required("staff", "admin")
+def list_all_events():
+    """List all events for admin/staff management."""
+    sql = """
+    SELECT
+        e.eid,
+        e.title,
+        e.description,
+        e.location,
+        e.image_url,
+        e.allow_multi_session,
+        e.status,
+        e.type_id,
+        e.created_at,
+        e.updated_at
+    FROM EVENT e
+    ORDER BY e.created_at DESC
+    """
+    with get_cursor() as cursor:
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+    return jsonify(rows)
 
 
 @events_bp.get("/")
@@ -95,6 +126,8 @@ def list_events():
         e.title,
         e.description,
         e.location,
+        e.image_url,
+        e.allow_multi_session,
         e.status,
         e.created_at,
         e.updated_at
@@ -150,8 +183,10 @@ def get_event_detail(eid: int):
         e.title,
         e.description,
         e.location,
+        e.allow_multi_session,
         e.status,
         e.type_id,
+        e.image_url,
         e.created_at,
         e.updated_at
     FROM EVENT e
@@ -194,6 +229,73 @@ def get_event_detail(eid: int):
     # 3. 拼出统一结构
     event["sessions"] = sessions
     return jsonify(event)
+
+
+@events_bp.put("/<int:eid>")
+@login_required
+@roles_required("staff", "admin")
+def update_event(eid: int):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = update_event_basic(eid, data)
+        result.setdefault("message_en", "Event updated successfully")
+        result.setdefault("message_zh", "Event updated successfully")
+        return jsonify(result), 200
+    except EventError as e:
+        return (
+            jsonify(
+                {
+                    "error": "event_update_failed",
+                    "message_zh": str(e),
+                    "message_en": "Failed to update event: " + str(e),
+                }
+            ),
+            400,
+        )
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "error": "server_error",
+                    "message_zh": "Internal server error: " + str(e),
+                    "message_en": "Internal server error: " + str(e),
+                }
+            ),
+            500,
+        )
+
+
+@events_bp.delete("/<int:eid>")
+@login_required
+@roles_required("staff", "admin")
+def delete_event_api(eid: int):
+    try:
+        result = delete_event(eid)
+        result.setdefault("message_en", "Event deleted successfully")
+        result.setdefault("message_zh", "Event deleted successfully")
+        return jsonify(result), 200
+    except EventError as e:
+        return (
+            jsonify(
+                {
+                    "error": "event_delete_failed",
+                    "message_zh": str(e),
+                    "message_en": "Failed to delete event: " + str(e),
+                }
+            ),
+            400,
+        )
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "error": "server_error",
+                    "message_zh": "Internal server error: " + str(e),
+                    "message_en": "Internal server error: " + str(e),
+                }
+            ),
+            500,
+        )
 
 
 @events_bp.get("/tags")

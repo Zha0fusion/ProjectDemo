@@ -66,6 +66,8 @@ CREATE TABLE EVENT (
     title        VARCHAR(255) NOT NULL,
     description  TEXT NULL,
     location     VARCHAR(255) NOT NULL,
+    image_url    VARCHAR(255) NULL,
+    allow_multi_session BOOLEAN NOT NULL DEFAULT FALSE,
     status       ENUM('draft', 'published', 'closed', 'archived') NOT NULL,
     created_at   DATETIME NOT NULL,
     updated_at   DATETIME NOT NULL,

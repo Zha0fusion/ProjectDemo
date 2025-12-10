@@ -59,6 +59,7 @@ class Event(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text)
     location = Column(String(255), nullable=False)
+    allow_multi_session = Column(Boolean, nullable=False, default=False)
     status = Column(
         Enum("draft", "published", "closed", "archived", name="event_status"),
         nullable=False,

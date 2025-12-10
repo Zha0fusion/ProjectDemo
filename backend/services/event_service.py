@@ -5,8 +5,11 @@ from backend.db import get_connection
 
 
 class EventError(Exception):
-    """活动相关业务错误"""
+    """Event business error"""
     pass
+
+
+ALLOWED_STATUS = ("draft", "published", "closed", "archived")
 
 
 def create_event_with_sessions(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -36,19 +39,21 @@ def create_event_with_sessions(payload: Dict[str, Any]) -> Dict[str, Any]:
     description = payload.get("description")
     location = payload.get("location")
     status = (payload.get("status") or "draft").strip()
+    image_url = payload.get("image_url")
+    allow_multi_session = bool(payload.get("allow_multi_session", False))
 
     if not title:
         raise EventError("title 不能为空")
 
-    if status not in ("draft", "published"):
-        raise EventError("status 必须是 'draft' 或 'published'")
+    if status not in ALLOWED_STATUS:
+        raise EventError("status must be one of: draft, published, closed, archived")
 
     # 新增：活动类型，前端可以传 type_id，不传就默认为 1
     type_id = payload.get("type_id", 1)
 
     sessions: List[Dict[str, Any]] = payload.get("sessions") or []
     if not isinstance(sessions, list) or len(sessions) == 0:
-        raise EventError("至少需要提供一个 session")
+        raise EventError("At least one session is required")
 
     now = datetime.now()
 
@@ -60,11 +65,11 @@ def create_event_with_sessions(payload: Dict[str, Any]) -> Dict[str, Any]:
                 """
                 INSERT INTO EVENT (
                     title, description, location, status,
-                    type_id,
+                    type_id, image_url, allow_multi_session,
                     created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (title, description, location, status, type_id, now, now),
+                (title, description, location, status, type_id, image_url, allow_multi_session, now, now),
             )
             eid = cursor.lastrowid
 
@@ -79,9 +84,9 @@ def create_event_with_sessions(payload: Dict[str, Any]) -> Dict[str, Any]:
 
                 # 简单校验
                 if not start_time or not end_time:
-                    raise EventError("每个 session 必须包含 start_time 和 end_time")
+                    raise EventError("Each session must include start_time and end_time")
                 if not isinstance(capacity, int) or capacity <= 0:
-                    raise EventError("session.capacity 必须为正整数")
+                    raise EventError("session.capacity must be a positive integer")
 
                 if not isinstance(waiting_list_limit, int) or waiting_list_limit < 0:
                     waiting_list_limit = 0
@@ -121,6 +126,7 @@ def create_event_with_sessions(payload: Dict[str, Any]) -> Dict[str, Any]:
             "eid": eid,
             "title": title,
             "status": status,
+            "allow_multi_session": allow_multi_session,
             "sessions": created_sessions,
         }
 
@@ -129,6 +135,83 @@ def create_event_with_sessions(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise
     except Exception as e:
         conn.rollback()
-        raise EventError("创建活动过程中发生错误：%s" % str(e))
+        raise EventError("Error occurred while creating event: %s" % str(e))
+    finally:
+        conn.close()
+
+
+def update_event_basic(eid: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update basic EVENT fields (no session edits here)."""
+
+    title = (payload.get("title") or "").strip()
+    description = payload.get("description")
+    location = payload.get("location")
+    status = (payload.get("status") or "draft").strip()
+    image_url = payload.get("image_url")
+    allow_multi_session = bool(payload.get("allow_multi_session", False))
+    type_id = payload.get("type_id", 1)
+
+    if not title:
+        raise EventError("title cannot be empty")
+    if status not in ALLOWED_STATUS:
+        raise EventError("status must be one of: draft, published, closed, archived")
+
+    now = datetime.now()
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE EVENT
+                SET title = %s,
+                    description = %s,
+                    location = %s,
+                    status = %s,
+                    type_id = %s,
+                    image_url = %s,
+                    allow_multi_session = %s,
+                    updated_at = %s
+                WHERE eid = %s
+                """,
+                (title, description, location, status, type_id, image_url, allow_multi_session, now, eid),
+            )
+            if cursor.rowcount == 0:
+                raise EventError("event not found")
+        conn.commit()
+        return {
+            "eid": eid,
+            "title": title,
+            "status": status,
+            "image_url": image_url,
+            "allow_multi_session": allow_multi_session,
+            "updated_at": now.isoformat(),
+        }
+    except EventError:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise EventError("Error occurred while updating event: %s" % str(e))
+    finally:
+        conn.close()
+
+
+def delete_event(eid: int) -> Dict[str, Any]:
+    """Delete an event and cascaded sessions."""
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM EVENT WHERE eid = %s", (eid,))
+            if cursor.rowcount == 0:
+                raise EventError("event not found")
+        conn.commit()
+        return {"eid": eid, "deleted": True}
+    except EventError:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise EventError("Error occurred while deleting event: %s" % str(e))
     finally:
         conn.close()

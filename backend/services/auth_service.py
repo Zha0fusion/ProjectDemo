@@ -15,6 +15,68 @@ class AuthError(Exception):
     pass
 
 
+def register(name: str, email: str, password: str) -> Dict[str, Any]:
+    """注册新用户并返回与登录类似的结构。
+
+    - 默认角色为 visitor；
+    - email 必须唯一；
+    - 当前阶段密码仍为明文存储，后续可统一替换为 bcrypt。
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise AuthError("name is required")
+    if not isinstance(email, str) or not email.strip():
+        raise AuthError("email is required")
+    if not isinstance(password, str) or not password:
+        raise AuthError("password is required")
+
+    name = name.strip()
+    email = email.strip()
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 检查 email 是否已存在
+            cursor.execute(
+                "SELECT user_id FROM `USER` WHERE email = %s",
+                (email,),
+            )
+            exists = cursor.fetchone()
+            if exists:
+                raise AuthError("email already registered")
+
+            # 插入新用户，默认角色 visitor
+            cursor.execute(
+                """
+                INSERT INTO `USER` (name, email, password, role)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (name, email, password, "visitor"),
+            )
+            user_id = cursor.lastrowid
+
+        conn.commit()
+
+        token_data = _create_access_token(user_id, "visitor")
+
+        return {
+            "user": {
+                "user_id": user_id,
+                "name": name,
+                "email": email,
+                "role": "visitor",
+            },
+            "token": token_data["token"],
+            "expires_at": token_data["expires_at"],
+            "message_zh": "注册成功",
+            "message_en": "Registration successful",
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def verify_password(plain_password: str, stored_password: str) -> bool:
     """
     开发阶段版本：明文比对。

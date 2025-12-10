@@ -5,6 +5,7 @@ from backend.services.auth_service import (
     login,
     logout,
     get_user_by_token,
+    register,
     AuthError,
 )
 
@@ -45,8 +46,8 @@ def login_api():
             jsonify(
                 {
                     "error": "invalid_request",
-                    "message_zh": "email 和 password 必须为字符串",
-                    "message_en": "email and password must be strings",
+                    "message_zh": "Email and password must be strings",
+                    "message_en": "Email and password must be strings",
                 }
             ),
             400,
@@ -72,7 +73,69 @@ def login_api():
             jsonify(
                 {
                     "error": "server_error",
-                    "message_zh": "服务器内部错误",
+                    "message_zh": "Internal server error: " + str(e),
+                    "message_en": "Internal server error: " + str(e),
+                }
+            ),
+            500,
+        )
+
+
+@auth_bp.post("/register")
+def register_api():
+    """注册接口
+
+    URL:
+      POST /api/auth/register
+
+    请求 JSON 示例：
+      {
+        "name": "Alice",
+        "email": "alice@example.com",
+        "password": "password123"
+      }
+    """
+    data = request.get_json(silent=True) or {}
+    name = data.get("name")
+    email = data.get("email")
+    password = data.get("password")
+
+    if not isinstance(name, str) or not isinstance(email, str) or not isinstance(password, str):
+        return (
+            jsonify(
+                {
+                    "error": "invalid_request",
+                    "message_zh": "Name, email and password must be strings",
+                    "message_en": "Name, email and password must be strings",
+                }
+            ),
+            400,
+        )
+
+    try:
+        result = register(name=name, email=email, password=password)
+        # 注册成功返回 201
+        return jsonify(result), 201
+    except AuthError as e:
+        err_msg = str(e)
+        # email 重复可以视为冲突
+        status = 409 if "already registered" in err_msg else 400
+        return (
+            jsonify(
+                {
+                    "error": "register_failed",
+                    "message_zh": err_msg,
+                    "message_en": "Registration failed: " + err_msg,
+                }
+            ),
+            status,
+        )
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "error": "server_error",
+                    "message_zh": "Internal server error: " + str(e),
                     "message_en": "Internal server error: " + str(e),
                 }
             ),
@@ -94,7 +157,7 @@ def logout_api():
             jsonify(
                 {
                     "error": "invalid_token",
-                    "message_zh": "缺少或格式错误的 Authorization 头",
+                    "message_zh": "Missing or invalid Authorization header",
                     "message_en": "Missing or invalid Authorization header",
                 }
             ),
@@ -106,7 +169,7 @@ def logout_api():
     return (
         jsonify(
             {
-                "message_zh": "已退出登录",
+                "message_zh": "Logged out successfully",
                 "message_en": "Logged out successfully",
             }
         ),
@@ -128,7 +191,7 @@ def get_me():
             jsonify(
                 {
                     "error": "invalid_token",
-                    "message_zh": "缺少或格式错误的 Authorization 头",
+                    "message_zh": "Missing or invalid Authorization header",
                     "message_en": "Missing or invalid Authorization header",
                 }
             ),
@@ -141,7 +204,7 @@ def get_me():
             jsonify(
                 {
                     "error": "invalid_token",
-                    "message_zh": "token 无效或已过期",
+                    "message_zh": "Token is invalid or has expired",
                     "message_en": "Token is invalid or has expired",
                 }
             ),

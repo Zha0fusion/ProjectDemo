@@ -17,6 +17,7 @@ from backend.api.registration_api import registration_bp
 from backend.api.analytics_api import analytics_bp
 from backend.api.checkin_api import checkin_bp
 from backend.api.groups_api import groups_bp
+from backend.api.admin_api import admin_bp
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -63,6 +64,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(analytics_bp, url_prefix="/api/analytics")
     app.register_blueprint(checkin_bp, url_prefix="/api/checkin")
     app.register_blueprint(groups_bp, url_prefix="/api")
+    app.register_blueprint(admin_bp, url_prefix="/api")
 
 
 def register_error_handlers(app: Flask) -> None:
